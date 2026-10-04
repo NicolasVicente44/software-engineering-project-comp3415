@@ -5,6 +5,46 @@ Course project for **COMP 3415: Software Engineering** at Lakehead University.
 **Description:**
 A software engineering project developed as part of COMP 3415. The project will be designed, developed, tested, and refined throughout the semester using collaborative software engineering practices.
 
+---
+
+## Tech Stack & Setup
+
+This repository is bootstrapped with **Next.js** (App Router), **TypeScript**, and **Tailwind CSS**.
+
+### Prerequisites
+
+- Node.js 18.18+ or 20+ (Node.js 22 LTS recommended)
+- npm (or yarn / pnpm / bun)
+
+### Getting Started
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/NicolasVicente44/software-engineering-project-comp3415.git
+   cd software-engineering-project-comp3415
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Run the development server:
+   ```bash
+   npm run dev
+   ```
+
+4. Open [http://localhost:3000](http://localhost:3000) in your browser to view the application.
+
+### Available Scripts
+
+- `npm run dev` - Starts the development server with Turbopack.
+- `npm run build` - Creates an optimized production build.
+- `npm run start` - Runs the production server after building.
+- `npm run lint` - Runs ESLint to check for code quality and style issues.
+
+---
+
 ## Contributing
 
 All team members must follow the contribution workflow below to keep the repository organized and ensure changes are reviewed before being merged into `main`.
@@ -50,8 +90,8 @@ Before merging:
 
 * Keep each branch focused on one feature, fix, or task whenever possible.
 * Write clear and descriptive commit messages.
-* Pull the latest changes from before starting new work.
-* Test your changes before requesting a review.
+* Pull the latest changes from `main` before starting new work.
+* Test your changes (`npm run build` and `npm run lint`) before requesting a review.
 * Review another team member's code before approving a pull request.
 * Do not push directly to `main`.
 * Do not commit passwords, API keys, secrets, or sensitive `.env` files.
