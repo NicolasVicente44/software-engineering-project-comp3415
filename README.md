@@ -29,12 +29,17 @@ This repository is bootstrapped with **Next.js** (App Router), **TypeScript**, a
    npm install
    ```
 
-3. Run the development server:
+3. Create `.env.local` from the template and fill in your Supabase project values:
+   ```bash
+   cp .env.example .env.local
+   ```
+
+4. Run the development server:
    ```bash
    npm run dev
    ```
 
-4. Open [http://localhost:3000](http://localhost:3000) in your browser to view the application.
+5. Open [http://localhost:3000](http://localhost:3000) in your browser to view the application.
 
 ### Available Scripts
 
@@ -42,6 +47,7 @@ This repository is bootstrapped with **Next.js** (App Router), **TypeScript**, a
 - `npm run build` - Creates an optimized production build.
 - `npm run start` - Runs the production server after building.
 - `npm run lint` - Runs ESLint to check for code quality and style issues.
+- `npm test` - Runs the Vitest test suite once (`npm run test:watch` for watch mode).
 
 ---
 
