@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "COMP 3415 Software Engineering Project",
-  description: "COMP 3415 course project",
+  title: "Grade Path",
+  description: "Plan your path to the grade you want",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
