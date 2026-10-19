@@ -92,12 +92,21 @@ Before merging:
 5. Resolve any review comments or discussions.
 6. Merge only after the required approval has been received.
 
+### Testing
+
+Every change that adds or modifies a major feature must include tests covering it (Vitest + Testing Library, placed next to the code as `*.test.ts(x)`).
+
+* New features need tests for their main behaviour, including error cases.
+* Bug fixes should include a test that fails without the fix.
+* All tests must pass (`npm test`) before you open or update a pull request. Do not merge with failing or skipped tests.
+* Update existing tests when you change behaviour they cover.
+
 ### General Guidelines
 
 * Keep each branch focused on one feature, fix, or task whenever possible.
 * Write clear and descriptive commit messages.
 * Pull the latest changes from `main` before starting new work.
-* Test your changes (`npm run build` and `npm run lint`) before requesting a review.
+* Test your changes (`npm run build`, `npm run lint` and `npm test`) before requesting a review.
 * Review another team member's code before approving a pull request.
 * Do not push directly to `main`.
 * Do not commit passwords, API keys, secrets, or sensitive `.env` files.
