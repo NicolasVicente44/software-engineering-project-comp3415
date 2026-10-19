@@ -15,8 +15,8 @@ describe("isProtectedPath", () => {
 });
 
 describe("isAuthPage", () => {
-  it("matches the login page", () => {
-    expect(isAuthPage("/login")).toBe(true);
+  it.each(["/login", "/signup"])("matches %s", (path) => {
+    expect(isAuthPage(path)).toBe(true);
   });
 
   it.each(["/", "/dashboard", "/loginx"])("does not match %s", (path) => {

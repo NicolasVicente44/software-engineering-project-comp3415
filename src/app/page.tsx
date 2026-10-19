@@ -13,7 +13,7 @@ export default function Home() {
           Sign in
         </Link>
         <Link
-          href="/login?mode=signup"
+          href="/signup"
           className={buttonVariants({ variant: "outline" })}
         >
           Sign up
