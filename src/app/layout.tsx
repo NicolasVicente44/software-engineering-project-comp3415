@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Grade Path",
+  title: "Grad Path",
   description: "Plan your path to the grade you want",
 };
 

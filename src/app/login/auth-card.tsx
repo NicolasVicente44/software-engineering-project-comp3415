@@ -23,7 +23,7 @@ export function AuthCard({
     <main className="flex flex-1 items-center justify-center px-4 py-16">
       <div className="flex w-full max-w-sm flex-col gap-6">
         <div className="text-center text-2xl font-semibold tracking-tight">
-          Grade Path
+          Grad Path
         </div>
         <Card>
           <CardHeader>
@@ -32,8 +32,8 @@ export function AuthCard({
             </CardTitle>
             <CardDescription>
               {isSignUp
-                ? "Sign up to start planning your grade path."
-                : "Sign in to continue to Grade Path."}
+                ? "Sign up to start planning your grad path."
+                : "Sign in to continue to Grad Path."}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
