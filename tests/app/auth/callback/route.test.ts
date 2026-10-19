@@ -27,6 +27,25 @@ describe("GET /auth/callback", () => {
     );
   });
 
+  it("redirects to the next path after a successful exchange", async () => {
+    exchangeCodeForSession.mockResolvedValue({ error: null });
+    const response = await call("?code=abc&next=/reset-password");
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/reset-password",
+    );
+  });
+
+  it.each(["https://evil.com", "//evil.com", "/\\evil.com"])(
+    "ignores unsafe next value %j",
+    async (next) => {
+      exchangeCodeForSession.mockResolvedValue({ error: null });
+      const response = await call(`?code=abc&next=${encodeURIComponent(next)}`);
+      expect(response.headers.get("location")).toBe(
+        "http://localhost:3000/dashboard",
+      );
+    },
+  );
+
   it("redirects to /login with an error when the exchange fails", async () => {
     exchangeCodeForSession.mockResolvedValue({ error: { message: "bad" } });
     const response = await call("?code=abc");
