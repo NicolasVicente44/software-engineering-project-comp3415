@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MIN_PASSWORD_LENGTH, parseCredentials } from "./validation";
+import { MIN_PASSWORD_LENGTH, parseCredentials } from "@/lib/auth/validation";
 
 function form(email?: string, password?: string) {
   const fd = new FormData();

@@ -7,9 +7,9 @@ const { signIn, signUp } = vi.hoisted(() => ({
   signUp: vi.fn(),
 }));
 
-vi.mock("./actions", () => ({ signIn, signUp }));
+vi.mock("@/lib/auth/actions", () => ({ signIn, signUp }));
 
-import { LoginForm } from "./login-form";
+import { LoginForm } from "@/components/auth/login-form";
 
 async function fillAndSubmit(buttonName: string) {
   await userEvent.type(screen.getByLabelText("Email"), "user@example.com");

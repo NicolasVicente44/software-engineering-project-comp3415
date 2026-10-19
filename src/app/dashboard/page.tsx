@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { signOut } from "@/app/login/actions";
+import { signOut } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/button";
 import {
   Card,

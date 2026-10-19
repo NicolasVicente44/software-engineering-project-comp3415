@@ -7,7 +7,7 @@ vi.mock("@supabase/ssr", () => ({
   createServerClient: () => ({ auth: { getUser } }),
 }));
 
-import { updateSession } from "./proxy";
+import { updateSession } from "@/lib/supabase/proxy";
 
 function request(path: string) {
   return new NextRequest(`http://localhost:3000${path}`);

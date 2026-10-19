@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAuthPage, isProtectedPath } from "./routes";
+import { isAuthPage, isProtectedPath } from "@/lib/supabase/routes";
 
 describe("isProtectedPath", () => {
   it.each(["/dashboard", "/dashboard/settings"])("protects %s", (path) => {

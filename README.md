@@ -94,7 +94,7 @@ Before merging:
 
 ### Testing
 
-Every change that adds or modifies a major feature must include tests covering it (Vitest + Testing Library, placed next to the code as `*.test.ts(x)`).
+Every change that adds or modifies a major feature must include tests covering it (Vitest + Testing Library, in the top-level `tests/` folder, mirroring the `src/` structure, e.g. `src/lib/auth/validation.ts` is tested by `tests/lib/auth/validation.test.ts`).
 
 * New features need tests for their main behaviour, including error cases.
 * Bug fixes should include a test that fails without the fix.

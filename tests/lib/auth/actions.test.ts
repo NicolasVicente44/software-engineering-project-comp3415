@@ -25,7 +25,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { signIn, signOut, signUp } from "./actions";
+import { signIn, signOut, signUp } from "@/lib/auth/actions";
 
 function form(email: string, password: string) {
   const fd = new FormData();

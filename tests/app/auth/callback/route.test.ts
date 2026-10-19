@@ -7,7 +7,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { exchangeCodeForSession } }),
 }));
 
-import { GET } from "./route";
+import { GET } from "@/app/auth/callback/route";
 
 function call(query: string) {
   return GET(new NextRequest(`http://localhost:3000/auth/callback${query}`));
