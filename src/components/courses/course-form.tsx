@@ -1,6 +1,12 @@
+"use client";
+import { useActionState } from "react";
+import type { CourseActionState } from "@/lib/courses/actions";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+import { Alert, AlertDescription} from "@/components/ui/alert";
 
 import {
   Select,
@@ -10,9 +16,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export function CourseForm() {
+type CourseFormProps = {
+    action: (previousState: CourseActionState,
+        formData: FormData
+    ) => Promise<CourseActionState>;
+}
+
+export function CourseForm({ action }: CourseFormProps) {
+    const initialState: CourseActionState = {};
+    const [state, formAction, pending] = useActionState(action, initialState);
     return (
-        <form className="flex flex-col gap-4">
+        <form action={formAction} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
                 <Label htmlFor="course_name">Course Name</Label>
                 <Input id="course_name" name="course_name" type="text" required placeholder="Software Engineering"/>
@@ -32,7 +46,8 @@ export function CourseForm() {
                         <SelectValue placeholder="Choose a status"/>
                     </SelectTrigger>
 
-                    <SelectContent>
+                {/* is based off of enum built in supabase */}
+                    <SelectContent> 
                         <SelectItem value="completed">Completed</SelectItem>
                         <SelectItem value="in_progress">In Progress</SelectItem>
                         <SelectItem value="dropped">Dropped</SelectItem>
@@ -40,7 +55,17 @@ export function CourseForm() {
                     </SelectContent>
                 </Select>
             </div>
-            <Button type="submit" className="w-full">Add Course</Button>
+
+    
+            <Button type="submit" disabled={pending} className="w-1/2">
+                {pending ? "Adding course..." : "Add Course"}
+            </Button>
+
+            {state.error && ( // shows error state
+                <Alert variant="destructive">
+                    <AlertDescription>{state.error}</AlertDescription>
+                </Alert>
+            )}
         </form>
     );
 }

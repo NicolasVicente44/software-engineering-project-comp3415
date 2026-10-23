@@ -1,5 +1,6 @@
 import { CourseForm } from "@/components/courses/course-form"
 import { Navbar } from "@/components/navbar";
+import { createCourse} from "@/lib/courses/actions"
 
 import {
   Card,
@@ -21,7 +22,7 @@ export default function AddCourse() {
                     </CardHeader>
 
                     <CardContent>
-                        <CourseForm/>
+                        <CourseForm action={createCourse}/>
                     </CardContent>
                 </Card>
             </main>
