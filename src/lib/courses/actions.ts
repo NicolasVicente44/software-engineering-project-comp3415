@@ -74,8 +74,6 @@ export async function createCourse(_previousState: CourseActionState, formData: 
     redirect("/courses");   
 }
 
-
-// update is WIP
 export async function updateCourse(_previousState: CourseActionState,formData: FormData): Promise<CourseActionState> {
     const supabase = await createClient();
 

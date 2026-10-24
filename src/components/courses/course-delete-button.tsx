@@ -8,28 +8,19 @@ type CourseDeleteButtonProps = {
     courseName: string;
 };
 
-export function CourseDeleteButton({
-courseId,
-    courseName,
-}: CourseDeleteButtonProps) {
+export function CourseDeleteButton({courseId,courseName,}: CourseDeleteButtonProps) {
     return (
         <form
             action={deleteCourse.bind(null, courseId)}
             onSubmit={(event) => {
-                if (
-                    !window.confirm(
-                        `Are you sure you want to delete "${courseName}"? This action cannot be undone.`
-                    )
-                ) {
+                if (!window.confirm(
+                        "Are you sure you want to delete '${courseName}'? This action cannot be undone.")
+                    ) {
                     event.preventDefault();
                 }
-            }}
-        >
-            <Button
-                type="submit"
-                variant="destructive"
-                className="rounded-xl"
-            >
+            }}>
+
+            <Button type="submit" variant="destructive" className="rounded-xl">
                 Delete Course
             </Button>
         </form>
