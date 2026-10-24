@@ -1,6 +1,7 @@
 import type { Course } from "@/types/course";
 import Link from "next/link";
 import {Button, buttonVariants} from "@/components/ui/button"
+import { CourseDeleteButton } from "@/components/courses/course-delete-button";
 
 import {
   Card,
@@ -9,7 +10,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { deleteCourse } from "@/lib/courses/actions";
 
 type CourseCardProps = {
     course: Course;
@@ -28,17 +28,12 @@ export function CourseCard({course}: CourseCardProps) {
                     <p>Status: {course.status === "in_progress" ? "In Progress": course.status.charAt(0).toUpperCase() + course.status.slice(1)} </p> 
                 </div>
 
-{/* update and delete are not set up yet */}
             <div className="flex gap-2">
                 <Link href={`/courses/${course.id}/edit`} className={buttonVariants({variant: "default", className: "rounded-xl"})}> 
                     Edit Course
                 </Link>
 
-                <form action={deleteCourse.bind(null, course.id)}>
-                    <Button type="submit" variant="destructive" className="rounded-xl">
-                        Delete Course
-                    </Button>
-                </form>
+                <CourseDeleteButton courseId={course.id} courseName={course.course_name}/>
             </div>
             </CardContent>
         </Card>

@@ -75,8 +75,8 @@ export async function createCourse(_previousState: CourseActionState, formData: 
 }
 
 
-// update is WIP, will be done soon and will fix any warnings
-export async function updateCourse(_previousState: CourseActionState, formData: FormData) {
+// update is WIP
+export async function updateCourse(_previousState: CourseActionState,formData: FormData): Promise<CourseActionState> {
     const supabase = await createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -87,13 +87,92 @@ export async function updateCourse(_previousState: CourseActionState, formData: 
         };
     }
 
+    const courseId = formData.get("id");
+    const courseName = formData.get("course_name");
+    const courseCode = formData.get("course_code");
+    const credits = formData.get("credits");
+    const status = formData.get("status");
+
+    // validatation of form data
+    if (typeof courseId !== "string" || courseId.trim() === "") {
+        return {
+            error: "A valid course ID is required."
+        };
+    }
+
+    if (typeof courseName !== "string" || courseName.trim() === "") {
+        return {
+            error: "Course name is required."
+        };
+    }
+
+    if (typeof courseCode !== "string" || courseCode.trim() === "") {
+        return {
+            error: "Course code is required."
+        };
+    }
+
+    if (typeof credits !== "string" || credits.trim() === "") {
+        return {
+            error: "Number of credits is required."
+        };
+    }
+
+    const creditsAsNumber = Number(credits);
+
+    if (!Number.isFinite(creditsAsNumber) || creditsAsNumber <= 0) {
+        return {
+            error: "Number of credits must be a positive number."
+        };
+    }
+
+    const statusTypes = [
+        "completed",
+        "in_progress",
+        "dropped",
+        "failed"
+    ];
+
+    if (typeof status !== "string" || !statusTypes.includes(status)) {
+        return {
+            error: "Please select a valid course status."
+        };
+    }
+
+    // Update only the course belonging to the logged-in user
+    const { data, error } = await supabase
+        .from("student_courses")
+        .update({
+            course_name: courseName.trim(),
+            course_code: courseCode.trim(),
+            credits: creditsAsNumber,
+            status: status
+        })
+        .eq("id", courseId)
+        .eq("user_id", user.id)
+        .select("id")
+        .maybeSingle();
+
+    if (error) {
+        console.error("Failed to update course:", error);
+
+        return {
+            error: "Unable to update course. Please try again."
+        };
+    }
+
+    if (!data) {
+        return {
+            error: "Course not found or you do not have permission to update it."
+        };
+    }
+
     redirect("/courses");
 }
 
 export async function deleteCourse(courseId: string): Promise<void>  {
     const supabase = await createClient();
-
-    const { data: { user } } = await supabase.auth.getUser();
+    const {data: { user }} = await supabase.auth.getUser();
 
     if (!user) {
         throw new Error("You must be signed in to delete a course.");
