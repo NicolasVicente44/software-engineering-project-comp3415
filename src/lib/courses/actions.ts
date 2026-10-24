@@ -23,15 +23,15 @@ export async function createCourse(_previousState: CourseActionState, formData: 
     const credits = formData.get("credits");
     const status = formData.get("status");
 
-    // validatation of form data
-    if (typeof courseName !== "string" || courseName.trim() === "") {
+    // validation of form data
+    if (typeof courseName !== "string" || courseName.trim() === "" || !/[A-Za-z]/.test(courseName)) {
         return {
-            error: "Course name must be suitable and is required."
+            error: "Course name can not be empty and must contain at least one letter."
         };
     }
-    if (typeof courseCode !== "string" || courseCode.trim() === "") {
+    if (typeof courseCode !== "string" || courseCode.trim() === "" || !/^[A-Za-z]{4}-\d{4}$/.test(courseCode.trim())) {
         return {
-            error: "Course code must be suitable and is required."
+            error: "Course code must be in the format ABCD-#### and is required."
         };
     }
 
@@ -91,22 +91,21 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
     const credits = formData.get("credits");
     const status = formData.get("status");
 
-    // validatation of form data
+    // validation of form data
     if (typeof courseId !== "string" || courseId.trim() === "") {
         return {
             error: "A valid course ID is required."
         };
     }
 
-    if (typeof courseName !== "string" || courseName.trim() === "") {
+    if (typeof courseName !== "string" || courseName.trim() === "" || !/[A-Za-z]/.test(courseName)) {
         return {
-            error: "Course name is required."
+            error: "Course name can not be empty and must contain at least one letter."
         };
     }
-
-    if (typeof courseCode !== "string" || courseCode.trim() === "") {
+    if (typeof courseCode !== "string" || courseCode.trim() === "" || !/^[A-Za-z]{4}-\d{4}$/.test(courseCode.trim())) {
         return {
-            error: "Course code is required."
+            error: "Course code must be in the format ABCD-#### and is required."
         };
     }
 

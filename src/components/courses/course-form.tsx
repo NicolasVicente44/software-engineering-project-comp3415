@@ -31,12 +31,19 @@ type CourseFormProps = {
     course?: Course;
 };
 
+const statusItems = [
+    { value: "completed", label: "Completed" },
+    { value: "in_progress", label: "In Progress" },
+    { value: "dropped", label: "Dropped" },
+    { value: "failed", label: "Failed" },
+];
+
 export function CourseForm({ action, course  }: CourseFormProps) {
     const initialState: CourseActionState = {};
     const [state, formAction, pending] = useActionState(action, initialState);
     const isEditing = !!course;
     return (
-        <form action={formAction} className="flex flex-col gap-4">
+        <form action={formAction} noValidate className="flex flex-col gap-4">
             {course && (<input type="hidden" name="id" value={course.id} />)}
 
             <div className="flex flex-col gap-2">
@@ -53,7 +60,7 @@ export function CourseForm({ action, course  }: CourseFormProps) {
             </div>
             <div className="flex flex-col gap-2">
                 <Label htmlFor="status">Status</Label>
-                <Select name="status" required defaultValue={course?.status}>
+                <Select name="status" required defaultValue={course?.status} items={statusItems}>
                     <SelectTrigger id="status" className="w-full">
                         <SelectValue placeholder="Choose a status"/>
                     </SelectTrigger>

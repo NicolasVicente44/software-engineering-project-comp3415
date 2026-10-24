@@ -105,7 +105,35 @@ describe("createCourse", () => {
         const result = await createCourse({}, formData);
 
         expect(result).toEqual({
-            error: "Course name must be suitable and is required."
+            error: "Course name can not be empty and must contain at least one letter."
+        });
+    });
+
+    it("error is returned when course name does not contain at least 1 letter", async () => {
+        const getUser = vi.fn().mockResolvedValue({
+            data: {
+                user: {
+                    id: "user-1234"
+                }
+            }
+        });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser,
+            },
+        });
+
+        const formData = new FormData();
+        formData.set("course_name", "123456");
+        formData.set("course_code", "COMP-4312");
+        formData.set("credits", "1");
+        formData.set("status", "completed");
+
+        const result = await createCourse({}, formData);
+
+        expect(result).toEqual({
+            error: "Course name can not be empty and must contain at least one letter."
         });
     });
 
@@ -133,7 +161,35 @@ describe("createCourse", () => {
         const result = await createCourse({}, formData);
 
         expect(result).toEqual({
-            error: "Course code must be suitable and is required."
+            error: "Course code must be in the format ABCD-#### and is required."
+        });
+    });
+
+    it("error is returned when course code does not fit AAAA-#### regex", async () => {
+        const getUser = vi.fn().mockResolvedValue({
+            data: {
+                user: {
+                    id: "user-1234"
+                }
+            }
+        });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser,
+            },
+        });
+
+        const formData = new FormData();
+        formData.set("course_name", "Software Engineering");
+        formData.set("course_code", "COMP-123");
+        formData.set("credits", "1");
+        formData.set("status", "completed");
+
+        const result = await createCourse({}, formData);
+
+        expect(result).toEqual({
+            error: "Course code must be in the format ABCD-#### and is required."
         });
     });
 

@@ -55,7 +55,7 @@ describe("CourseForm", () => {
 
         expect(
             screen.getByLabelText("Status")
-        ).toHaveTextContent("completed");
+        ).toHaveTextContent("Completed");
     });
 
 
