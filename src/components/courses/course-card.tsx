@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { deleteCourse } from "@/lib/courses/actions";
 
 type CourseCardProps = {
     course: Course;
@@ -33,9 +34,11 @@ export function CourseCard({course}: CourseCardProps) {
                     Edit Course
                 </Link>
 
-                <Button variant="destructive" className="rounded-xl">
-                    Delete Course
-                </Button>
+                <form action={deleteCourse.bind(null, course.id)}>
+                    <Button type="submit" variant="destructive" className="rounded-xl">
+                        Delete Course
+                    </Button>
+                </form>
             </div>
             </CardContent>
         </Card>

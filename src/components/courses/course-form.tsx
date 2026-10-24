@@ -56,7 +56,7 @@ export function CourseForm({ action }: CourseFormProps) {
                 </Select>
             </div>
 
-    
+
             <Button type="submit" disabled={pending} className="w-1/2">
                 {pending ? "Adding course..." : "Add Course"}
             </Button>
