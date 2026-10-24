@@ -14,12 +14,11 @@ export function CourseDeleteButton({courseId,courseName,}: CourseDeleteButtonPro
             action={deleteCourse.bind(null, courseId)}
             onSubmit={(event) => {
                 if (!window.confirm(
-                        "Are you sure you want to delete '${courseName}'? This action cannot be undone.")
-                    ) {
+                    `Are you sure you want to delete "${courseName}"? This action cannot be undone.`)
+                ) {
                     event.preventDefault();
                 }
             }}>
-
             <Button type="submit" variant="destructive" className="rounded-xl">
                 Delete Course
             </Button>
