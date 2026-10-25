@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { signOut } from "@/lib/auth/actions";
-import { Button } from "@/components/ui/button";
+import { Navbar } from "@/components/navbar";
 import {
   Card,
   CardContent,
@@ -20,18 +19,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="border-b">
-        <div className="mx-auto flex w-full max-w-4xl items-center justify-between px-4 py-3">
-          <span className="text-lg font-semibold tracking-tight">
-            Grad Path
-          </span>
-          <form action={signOut}>
-            <Button type="submit" variant="outline" size="sm">
-              Sign out
-            </Button>
-          </form>
-        </div>
-      </header>
+      <Navbar />
       <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
         <Card>
           <CardHeader>
