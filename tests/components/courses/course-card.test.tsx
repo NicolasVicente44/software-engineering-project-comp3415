@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it} from "vitest";
 import { CourseCard } from "@/components/courses/course-card";
 
 const course = {
@@ -34,6 +34,5 @@ describe("CourseCard", () => {
             screen.getByRole("button", { name: "Delete Course" })
         ).toBeInTheDocument();
     });
-
 });
 

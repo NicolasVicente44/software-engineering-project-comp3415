@@ -1,7 +1,11 @@
+"use client"
 import type { Course } from "@/types/course";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button"
 import { CourseDeleteButton } from "@/components/courses/course-delete-button";
+import { useActionState } from "react";
+import { deleteCourse, type CourseActionState } from "@/lib/courses/actions";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import {
   Card,
@@ -16,6 +20,15 @@ type CourseCardProps = {
 };
 
 export function CourseCard({course}: CourseCardProps) {
+    const initialState: CourseActionState = {};
+
+    const [state, formAction, pending] = useActionState(
+        async (previousState: CourseActionState) => {
+            void previousState;
+            return await deleteCourse(course.id);
+        },
+        initialState
+    );
     return (
         <Card className="mt-5 w-1/2">
             <CardHeader>
@@ -33,9 +46,15 @@ export function CourseCard({course}: CourseCardProps) {
                     Edit Course
                 </Link>
 
-                <CourseDeleteButton courseId={course.id} courseName={course.course_name}/>
+                <CourseDeleteButton courseName={course.course_name} formAction={formAction} pending={pending}/>
             </div>
             </CardContent>
+
+            {state.error && (
+                <Alert variant="destructive" className="mx-6 mb-4 mt-1 border-0 bg-transparent p-0">
+                    <AlertDescription>{state.error}</AlertDescription>
+                </Alert>
+        )}
         </Card>
     )
 }

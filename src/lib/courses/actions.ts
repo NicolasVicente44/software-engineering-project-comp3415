@@ -167,16 +167,20 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
     redirect("/courses");
 }
 
-export async function deleteCourse(courseId: string): Promise<void>  {
+export async function deleteCourse(courseId: string): Promise<CourseActionState>  {
     const supabase = await createClient();
     const {data: { user }} = await supabase.auth.getUser();
 
     if (!user) {
-        throw new Error("You must be signed in to delete a course.");
+        return {
+            error: "You must be signed in to delete a course."
+        };
     }
 
     if (!courseId || courseId.trim() === "") {
-        throw new Error("A course ID is required.");
+        return {
+            error: "A course ID is required."
+        };
     }
 
     const { data, error } = await supabase
@@ -189,13 +193,16 @@ export async function deleteCourse(courseId: string): Promise<void>  {
 
     if (error) {
         console.error("Failed to delete course:", error);
-        throw new Error("Unable to delete course. Please try again.");
+        return {
+            error: "Unable to delete course. Please try again."
+        };
+
     }
 
     if (!data) {
-        throw new Error(
-            "Course not found or you do not have permission to delete it."
-        );
+        return {
+            error: "Course not found or you do not have permission to delete it."
+        };
     }
 
     redirect("/courses");

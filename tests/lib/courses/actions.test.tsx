@@ -560,7 +560,7 @@ describe("updateCourse", () => {
 });
 
 describe("deleteCourse", () => {
-    it("error is thrown when the user is not signed in", async () => {  
+    it("error is returned when the user is not signed in", async () => {  
         const getUser = vi.fn().mockResolvedValue({
             data: {
                 user: null
@@ -573,9 +573,11 @@ describe("deleteCourse", () => {
             },
         });
 
-        await expect(
-            deleteCourse("fake-course")
-        ).rejects.toThrow("You must be signed in to delete a course.");
+        const result = await deleteCourse("fake-course");
+
+        expect(result).toEqual({
+            error: "You must be signed in to delete a course."
+        });
     });
 
     it("course is deleted when valid course ID is given by user that is logged in", async () => {
@@ -629,7 +631,7 @@ describe("deleteCourse", () => {
         expect(redirect).toHaveBeenCalledWith("/courses");
     });
 
-    it("error is thrown when course ID is empty", async () => {
+    it("error is returned when course ID is empty", async () => {
         const getUser = vi.fn().mockResolvedValue({
             data: {
                 user: {
@@ -644,12 +646,14 @@ describe("deleteCourse", () => {
             },
         });
 
-        await expect(
-            deleteCourse("")
-        ).rejects.toThrow("A course ID is required.");
+        const result = await deleteCourse("");
+
+        expect(result).toEqual({
+            error: "A course ID is required."
+        });
     });
 
-    it("course id is not found or permission is not granted", async () => {
+    it("error is returned when course id is not found or permission is not granted", async () => {
         const getUser = vi.fn().mockResolvedValue({
             data: {
                 user: {
@@ -690,13 +694,15 @@ describe("deleteCourse", () => {
             from,
         });
 
-        await expect(
-            deleteCourse("fake-course")
-        ).rejects.toThrow("Course not found or you do not have permission to delete it.");
+        const result = await deleteCourse("fake-course");
+
+        expect(result).toEqual({
+            error: "Course not found or you do not have permission to delete it."
+        });
     });
 
     
-    it("error is thrown when database delete failed", async () => {
+    it("error is returned when database delete failed", async () => {
         const getUser = vi.fn().mockResolvedValue({
             data: {
                 user: {
@@ -739,8 +745,10 @@ describe("deleteCourse", () => {
             from,
         });
 
-        await expect(
-            deleteCourse("fake-course")
-        ).rejects.toThrow("Unable to delete course. Please try again.");
+        const result = await deleteCourse("fake-course");
+
+        expect(result).toEqual({
+            error: "Unable to delete course. Please try again."
+        });
     });
 });

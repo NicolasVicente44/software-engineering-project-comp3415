@@ -1,8 +1,8 @@
-import { notFound } from "next/navigation";
 import { CourseForm } from "@/components/courses/course-form";
 import { Navbar } from "@/components/navbar";
 import { updateCourse } from "@/lib/courses/actions";
 import { createClient } from "@/lib/supabase/server";
+import { redirect, notFound } from "next/navigation";
 
 import {
     Card,
@@ -21,7 +21,7 @@ export default async function EditCourse({ params }: EditCourseProps) {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-        notFound();
+        redirect("/login"); 
     }
 
     const { data: course, error } = await supabase
