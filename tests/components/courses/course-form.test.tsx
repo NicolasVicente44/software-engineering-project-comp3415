@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { CourseForm } from "@/components/courses/course-form";
 import userEvent from "@testing-library/user-event";
+import { CourseActionState } from "@/lib/courses/actions";
 
 
 describe("CourseForm", () => {
@@ -58,9 +59,9 @@ describe("CourseForm", () => {
         ).toHaveTextContent("Completed");
     });
 
-
     it("submits the course information to the action", async() => {
-        const action = vi.fn(async (previousState, _formData: FormData) => ({}));
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const action = vi.fn(async (previousState: CourseActionState, _formData: FormData) => ({}));
         render(<CourseForm action={action} />);
 
         await userEvent.type(

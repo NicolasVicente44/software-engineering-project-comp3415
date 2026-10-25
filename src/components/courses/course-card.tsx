@@ -1,6 +1,6 @@
 import type { Course } from "@/types/course";
 import Link from "next/link";
-import {Button, buttonVariants} from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
 import { CourseDeleteButton } from "@/components/courses/course-delete-button";
 
 import {
