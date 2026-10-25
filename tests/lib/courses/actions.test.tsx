@@ -295,6 +295,270 @@ describe("createCourse", () => {
     });
 });
 
+describe("updateCourse", () => {
+    const validFormData = () => {
+        const formData = new FormData();
+        formData.set("id", "course-123");
+        formData.set("course_name", "Software Engineering");
+        formData.set("course_code", "COMP-3415");
+        formData.set("credits", "3");
+        formData.set("status", "in_progress");
+        return formData;
+    };
+
+    const mockLoggedInUser = () => {
+        const getUser = vi.fn().mockResolvedValue({
+            data: {
+                user: { id: "user-1234" }
+            }
+        });
+
+        createClient.mockResolvedValue({
+            auth: { getUser }
+        });
+
+        return getUser;
+    };
+
+    it("returns an error when the user is not signed in", async () => {
+        const getUser = vi.fn().mockResolvedValue({
+            data: { user: null }
+        });
+
+        createClient.mockResolvedValue({
+            auth: { getUser }
+        });
+
+        const result = await updateCourse({}, validFormData());
+
+        expect(result).toEqual({
+            error: "You must be signed in to update a course."
+        });
+    });
+
+    it("returns an error if course ID does not exist", async () => {
+        mockLoggedInUser();
+
+        const maybeSingle = vi.fn().mockResolvedValue({
+            data: null,
+            error: null
+        });
+
+        const select = vi.fn().mockReturnValue({ maybeSingle });
+        const secondEq = vi.fn().mockReturnValue({ select });
+        const firstEq = vi.fn().mockReturnValue({ eq: secondEq });
+        const update = vi.fn().mockReturnValue({ eq: firstEq });
+
+        const from = vi.fn().mockReturnValue({ update });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({
+                    data: { user: { id: "user-1234" } }
+                })
+            },
+            from
+        });
+
+        const result = await updateCourse({}, validFormData());
+
+        expect(result).toEqual({
+            error: "Course not found or you do not have permission to update it."
+        });
+
+        expect(firstEq).toHaveBeenCalledWith("id", "course-123");
+        expect(secondEq).toHaveBeenCalledWith("user_id", "user-1234");
+    });
+
+    it("course is updated when valid course ID exists and information is valid", async () => {
+        mockLoggedInUser();
+
+        const maybeSingle = vi.fn().mockResolvedValue({
+            data: { id: "course-123" },
+            error: null
+        });
+
+        const select = vi.fn().mockReturnValue({ maybeSingle });
+        const secondEq = vi.fn().mockReturnValue({ select });
+        const firstEq = vi.fn().mockReturnValue({ eq: secondEq });
+        const update = vi.fn().mockReturnValue({ eq: firstEq });
+        const from = vi.fn().mockReturnValue({ update });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({
+                    data: { user: { id: "user-1234" } }
+                })
+            },
+            from
+        });
+
+        const result = await updateCourse({}, validFormData());
+
+        expect(from).toHaveBeenCalledWith("student_courses");
+
+        expect(update).toHaveBeenCalledWith({
+            course_name: "Software Engineering",
+            course_code: "COMP-3415",
+            credits: 3,
+            status: "in_progress"
+        });
+
+        expect(firstEq).toHaveBeenCalledWith("id", "course-123");
+        expect(secondEq).toHaveBeenCalledWith("user_id", "user-1234");
+        expect(select).toHaveBeenCalledWith("id");
+        expect(redirect).toHaveBeenCalledWith("/courses");
+        expect(result).toBeUndefined();
+    });
+
+    it("returns an error when course ID is empty", async () => {
+        mockLoggedInUser();
+
+        const formData = validFormData();
+        formData.set("id", "");
+
+        const result = await updateCourse({}, formData);
+
+        expect(result).toEqual({
+            error: "A valid course ID is required."
+        });
+    });
+
+    it("returns an error when course name is empty", async () => {
+        mockLoggedInUser();
+
+        const formData = validFormData();
+        formData.set("course_name", "");
+
+        const result = await updateCourse({}, formData);
+
+        expect(result).toEqual({
+            error: "Course name can not be empty and must contain at least one letter."
+        });
+    });
+
+    it("returns an error when course name does not contain at least one letter", async () => {
+        mockLoggedInUser();
+
+        const formData = validFormData();
+        formData.set("course_name", "123456");
+
+        const result = await updateCourse({}, formData);
+
+        expect(result).toEqual({
+            error: "Course name can not be empty and must contain at least one letter."
+        });
+    });
+
+    it("returns an error when course code is empty", async () => {
+        mockLoggedInUser();
+
+        const formData = validFormData();
+        formData.set("course_code", "");
+
+        const result = await updateCourse({}, formData);
+
+        expect(result).toEqual({
+            error: "Course code must be in the format ABCD-#### and is required."
+        });
+    });
+
+    it("returns an error when course code does not fit the AAAA-#### regex", async () => {
+        mockLoggedInUser();
+
+        const formData = validFormData();
+        formData.set("course_code", "COMP-123");
+
+        const result = await updateCourse({}, formData);
+
+        expect(result).toEqual({
+            error: "Course code must be in the format ABCD-#### and is required."
+        });
+    });
+
+    it("returns an error when credits are empty", async () => {
+        mockLoggedInUser();
+
+        const formData = validFormData();
+        formData.set("credits", "");
+
+        const result = await updateCourse({}, formData);
+
+        expect(result).toEqual({
+            error: "Number of credits is required."
+        });
+    });
+
+    it("returns an error when credit number is invalid", async () => {
+        mockLoggedInUser();
+
+        const formData = validFormData();
+        formData.set("credits", "-1");
+
+        const result = await updateCourse({}, formData);
+
+        expect(result).toEqual({
+            error: "Number of credits must be a positive number."
+        });
+    });
+
+    it("returns an error when credits are not a number", async () => {
+        mockLoggedInUser();
+
+        const formData = validFormData();
+        formData.set("credits", "abc");
+
+        const result = await updateCourse({}, formData);
+
+        expect(result).toEqual({
+            error: "Number of credits must be a positive number."
+        });
+    });
+
+    it("returns an error when course status is invalid", async () => {
+        mockLoggedInUser();
+
+        const formData = validFormData();
+        formData.set("status", "not_a_status");
+
+        const result = await updateCourse({}, formData);
+
+        expect(result).toEqual({
+            error: "Please select a valid course status."
+        });
+    });
+
+    it("returns an error when the database update fails", async () => {
+        mockLoggedInUser();
+
+        const maybeSingle = vi.fn().mockResolvedValue({
+            data: null,
+            error: { message: "Error in database" }
+        });
+
+        const select = vi.fn().mockReturnValue({ maybeSingle });
+        const secondEq = vi.fn().mockReturnValue({ select });
+        const firstEq = vi.fn().mockReturnValue({ eq: secondEq });
+        const update = vi.fn().mockReturnValue({ eq: firstEq });
+        const from = vi.fn().mockReturnValue({ update });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({
+                    data: { user: { id: "user-1234" } }
+                })
+            },
+            from
+        });
+
+        const result = await updateCourse({}, validFormData());
+
+        expect(result).toEqual({
+            error: "Unable to update course. Please try again."
+        });
+    });
+});
+
 describe("deleteCourse", () => {
     it("error is thrown when the user is not signed in", async () => {  
         const getUser = vi.fn().mockResolvedValue({
