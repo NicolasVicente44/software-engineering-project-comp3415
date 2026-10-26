@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { checkPrerequisites } from "@/lib/prerequisites/check";
 
 export type CourseActionState = {
     error?: string;
@@ -52,6 +53,28 @@ export async function createCourse(_previousState: CourseActionState, formData: 
         return {
             error: "Status must be completed, in_progress, dropped, or failed."
         };
+    }
+
+    // block in-progress course if prerequisites are missing (us-03)
+    if (status === "in_progress") {
+        const { data: studentCourses, error: queryError } = await supabase
+            .from("student_courses")
+            .select("course_code, status")
+            .eq("user_id", user.id);
+
+        if (queryError) {
+            console.error("Failed to check prerequisites: ", queryError);
+            return {
+                error: "Could not check prerequisites."
+            };
+        }
+
+        const result = checkPrerequisites(courseCode, studentCourses ?? []);
+        if (!result.eligible) {
+            return {
+                error: `Missing prerequisites: ${result.missing.join(", ")}`
+            };
+        }
     }
     
     const {error} = await supabase.from("student_courses").insert( // database insert
