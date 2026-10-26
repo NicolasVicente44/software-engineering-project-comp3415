@@ -293,6 +293,106 @@ describe("createCourse", () => {
             error: "Unable to add course. Please try again."
         });
     });
+
+    // in-progress COMP-3415 needs COMP-2412 and COMP-2477 (us-03)
+    const mockPrereqQuery = () => {
+        const eq = vi.fn().mockResolvedValue({ data: [], error: null });
+        const select = vi.fn().mockReturnValue({ eq });
+        const insert = vi.fn().mockResolvedValue({ error: null });
+        const from = vi.fn().mockReturnValue({ select, insert });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({
+                    data: { user: { id: "user-1234" } }
+                })
+            },
+            from
+        });
+
+        return { eq, insert, from };
+    };
+
+    const inProgressFormData = (status = "in_progress") => {
+        const formData = new FormData();
+        formData.set("course_name", "Software Engineering");
+        formData.set("course_code", "COMP-3415");
+        formData.set("credits", "1");
+        formData.set("status", status);
+        return formData;
+    };
+
+    it("blocks adding a course when prerequisites are missing", async () => {
+        const { eq, insert } = mockPrereqQuery();
+        eq.mockResolvedValueOnce({
+            data: [{ course_code: "COMP-2412", status: "completed" }],
+            error: null
+        });
+
+        const result = await createCourse({}, inProgressFormData());
+
+        expect(result).toEqual({
+            error: "Missing prerequisites: COMP-2477"
+        });
+        expect(insert).not.toHaveBeenCalled();
+    });
+
+    it("adds a course when all prerequisites are completed", async () => {
+        const { eq, insert, from } = mockPrereqQuery();
+        eq.mockResolvedValueOnce({
+            data: [
+                { course_code: "COMP-2412", status: "completed" },
+                { course_code: "COMP-2477", status: "completed" }
+            ],
+            error: null
+        });
+        redirect.mockClear();
+
+        await createCourse({}, inProgressFormData());
+
+        expect(insert).toHaveBeenCalledWith({
+            user_id: "user-1234",
+            course_name: "Software Engineering",
+            course_code: "COMP-3415",
+            credits: 1,
+            status: "in_progress"
+        });
+
+        expect(from).toHaveBeenCalledWith("student_courses");
+        expect(redirect).toHaveBeenCalledWith("/courses");
+    });
+
+    it("returns an error when the prerequisite check fails", async () => {
+        const { eq, insert } = mockPrereqQuery();
+        eq.mockResolvedValueOnce({
+            data: null,
+            error: { message: "db down" }
+        });
+        const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        const result = await createCourse({}, inProgressFormData());
+        consoleError.mockRestore();
+
+        expect(result).toEqual({
+            error: "Could not check prerequisites."
+        });
+        expect(insert).not.toHaveBeenCalled();
+    });
+
+    it("skips the prerequisite check for a completed course", async () => {
+        const { eq, insert } = mockPrereqQuery();
+
+        await createCourse({}, inProgressFormData("completed"));
+
+        expect(insert).toHaveBeenCalledWith({
+            user_id: "user-1234",
+            course_name: "Software Engineering",
+            course_code: "COMP-3415",
+            credits: 1,
+            status: "completed"
+        });
+        expect(eq).not.toHaveBeenCalled();
+    });
 });
 
 describe("updateCourse", () => {
