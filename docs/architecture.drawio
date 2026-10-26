@@ -1,0 +1,169 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="GradPath Architecture" id="gradpath-arch">
+    <mxGraphModel dx="2946" dy="2760" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="1200" math="0" shadow="0" adaptiveColors="auto">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;fontSize=20;fontStyle=1;align=left;verticalAlign=middle;" value="GradPath: System Design Architecture" vertex="1">
+          <mxGeometry height="30" width="500" x="40" y="-90" as="geometry" />
+        </mxCell>
+        <mxCell id="uStudent" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Student" vertex="1">
+          <mxGeometry height="40" width="140" x="170" y="-28" as="geometry" />
+        </mxCell>
+        <mxCell id="uAdvisor" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#ffffff;strokeColor=#6c8ebf;dashed=1;" value="Academic Advisor" vertex="1">
+          <mxGeometry height="40" width="140" x="475" y="-28" as="geometry" />
+        </mxCell>
+        <mxCell id="uAdmin" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#ffffff;strokeColor=#6c8ebf;dashed=1;" value="Administrator" vertex="1">
+          <mxGeometry height="40" width="140" x="740" y="-28" as="geometry" />
+        </mxCell>
+        <mxCell id="pres" parent="1" style="swimlane;startSize=30;html=1;fontSize=14;fillColor=#f0f4fb;strokeColor=#6c8ebf;fontColor=#1f3a6e;align=left;spacingLeft=10;" value="Presentation layer (browser: React 19, Tailwind CSS, shadcn/ui)" vertex="1">
+          <mxGeometry height="240" width="1000" x="40" y="52" as="geometry" />
+        </mxCell>
+        <mxCell id="logoReact" parent="pres" style="shape=image;html=1;aspect=fixed;image=https://icons.diagrams.net/icon-cache1/Brands_Pack-2317/react-1379.svg;" value="" vertex="1">
+          <mxGeometry height="24" width="24" x="960" y="3" as="geometry" />
+        </mxCell>
+        <mxCell id="pAuth" parent="pres" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Auth pages&lt;/b&gt;&lt;br&gt;&lt;small&gt;/login, /signup, /forgot-password, /reset-password&lt;/small&gt;" vertex="1">
+          <mxGeometry height="60" width="240" x="15" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="pDash" parent="pres" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Dashboard&lt;/b&gt;&lt;br&gt;&lt;small&gt;/dashboard&lt;/small&gt;" vertex="1">
+          <mxGeometry height="60" width="150" x="270" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="pCourse" parent="pres" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Course pages&lt;/b&gt;&lt;br&gt;&lt;small&gt;/courses, /courses/add, /courses/[id]/edit&lt;/small&gt;" vertex="1">
+          <mxGeometry height="60" width="250" x="435" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="pPlan" parent="pres" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#6c8ebf;dashed=1;" value="&lt;b&gt;Plan &amp;amp; calendar&lt;/b&gt;&lt;br&gt;&lt;small&gt;term board, graph, .ics&lt;/small&gt;" vertex="1">
+          <mxGeometry height="60" width="150" x="700" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="pStaff" parent="pres" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#6c8ebf;dashed=1;" value="&lt;b&gt;Advisor / admin&lt;/b&gt;&lt;br&gt;&lt;small&gt;review, data editor&lt;/small&gt;" vertex="1">
+          <mxGeometry height="60" width="120" x="865" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="cAuth" parent="pres" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#e8eefb;strokeColor=#6c8ebf;" value="&lt;b&gt;Auth components&lt;/b&gt;&lt;br&gt;&lt;small&gt;AuthShell, AuthCard, login / forgot / reset forms, password-strength hint&lt;/small&gt;" vertex="1">
+          <mxGeometry height="70" width="240" x="15" y="125" as="geometry" />
+        </mxCell>
+        <mxCell id="cCourse" parent="pres" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#e8eefb;strokeColor=#6c8ebf;" value="&lt;b&gt;Course components&lt;/b&gt;&lt;br&gt;&lt;small&gt;CourseForm (add / edit), CourseCard, CourseDeleteButton; form state with useActionState&lt;/small&gt;" vertex="1">
+          <mxGeometry height="70" width="415" x="270" y="125" as="geometry" />
+        </mxCell>
+        <mxCell id="cNav" parent="pres" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#e8eefb;strokeColor=#6c8ebf;" value="&lt;b&gt;Navbar&lt;/b&gt;&lt;br&gt;&lt;small&gt;links, sign out&lt;/small&gt;" vertex="1">
+          <mxGeometry height="70" width="150" x="700" y="125" as="geometry" />
+        </mxCell>
+        <mxCell id="cUi" parent="pres" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#e8eefb;strokeColor=#6c8ebf;" value="&lt;b&gt;shadcn/ui&lt;/b&gt;&lt;br&gt;&lt;small&gt;Button, Card, Input, Label, Select, Alert&lt;/small&gt;" vertex="1">
+          <mxGeometry height="70" width="120" x="865" y="125" as="geometry" />
+        </mxCell>
+        <mxCell id="app" parent="1" style="swimlane;startSize=30;html=1;fontSize=14;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#222222;align=left;spacingLeft=10;" value="Application layer (Next.js 16 App Router, TypeScript, Vercel)" vertex="1">
+          <mxGeometry height="310" width="1000" x="40" y="392" as="geometry" />
+        </mxCell>
+        <mxCell id="logoNext" parent="app" style="shape=image;html=1;aspect=fixed;image=https://icons.diagrams.net/icon-cache1/Miscellaneous-2232/next-603.svg;" value="" vertex="1">
+          <mxGeometry height="24" width="24" x="925" y="3" as="geometry" />
+        </mxCell>
+        <mxCell id="logoVercel" parent="app" style="shape=image;html=1;aspect=fixed;image=https://icons.diagrams.net/assets/tabler-filled/1/Brand_Vercel.svg;" value="" vertex="1">
+          <mxGeometry height="24" width="24" x="960" y="3" as="geometry" />
+        </mxCell>
+        <mxCell id="aProxy" parent="app" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Proxy&lt;/b&gt; (src/proxy.ts)&lt;br&gt;&lt;small&gt;refreshes session; guards /dashboard and /reset-password; redirects signed-in users off auth pages&lt;/small&gt;" vertex="1">
+          <mxGeometry height="75" width="240" x="15" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="aPages" parent="app" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Server Components&lt;/b&gt;&lt;br&gt;&lt;small&gt;page.tsx files: check the user, query student_courses, render; /courses redirects to /login itself&lt;/small&gt;" vertex="1">
+          <mxGeometry height="75" width="240" x="270" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="aRoute" parent="app" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Route handler&lt;/b&gt;&lt;br&gt;&lt;small&gt;/auth/callback: exchanges the email-link code for a session, then safe redirect&lt;/small&gt;" vertex="1">
+          <mxGeometry height="75" width="220" x="525" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="aClients" parent="app" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Supabase clients&lt;/b&gt;&lt;br&gt;&lt;small&gt;client.ts (browser), server.ts (cookie-based), proxy.ts (updateSession)&lt;/small&gt;" vertex="1">
+          <mxGeometry height="75" width="225" x="760" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="aActAuth" parent="app" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Auth Server Actions&lt;/b&gt;&lt;br&gt;&lt;small&gt;signIn, signUp, requestPasswordReset, updatePassword, signOut&lt;/small&gt;" vertex="1">
+          <mxGeometry height="70" width="240" x="15" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="aActCourse" parent="app" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Course Server Actions&lt;/b&gt;&lt;br&gt;&lt;small&gt;createCourse, updateCourse, deleteCourse: user check, ownership filter, returns { error }&lt;/small&gt;" vertex="1">
+          <mxGeometry height="70" width="240" x="270" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="aValid" parent="app" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Validation&lt;/b&gt;&lt;br&gt;&lt;small&gt;input rules, error mapping, safeNextPath (open-redirect guard)&lt;/small&gt;" vertex="1">
+          <mxGeometry height="70" width="220" x="525" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="aTypes" parent="app" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Shared types&lt;/b&gt;&lt;br&gt;&lt;small&gt;Course type, CourseActionState, AuthState&lt;/small&gt;" vertex="1">
+          <mxGeometry height="70" width="225" x="760" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="aPlanner" parent="app" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#6c8ebf;dashed=1;" value="&lt;b&gt;Planner module&lt;/b&gt; (pure TypeScript)&lt;br&gt;&lt;small&gt;prerequisite check (AND / OR), cycle detection, term scheduler, credit limit, recalculation&lt;/small&gt;" vertex="1">
+          <mxGeometry height="75" width="240" x="15" y="225" as="geometry" />
+        </mxCell>
+        <mxCell id="aSeed" parent="app" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#6c8ebf;dashed=1;" value="&lt;b&gt;Catalog seed script&lt;/b&gt;&lt;br&gt;&lt;small&gt;loads courses, prerequisites, programs from the official calendar&lt;/small&gt;" vertex="1">
+          <mxGeometry height="75" width="240" x="270" y="225" as="geometry" />
+        </mxCell>
+        <mxCell id="aIcs" parent="app" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#6c8ebf;dashed=1;" value="&lt;b&gt;Calendar export&lt;/b&gt;&lt;br&gt;&lt;small&gt;.ics generator for plan and deadlines&lt;/small&gt;" vertex="1">
+          <mxGeometry height="75" width="220" x="525" y="225" as="geometry" />
+        </mxCell>
+        <mxCell id="aJob" parent="app" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#6c8ebf;dashed=1;" value="&lt;b&gt;Reminder job&lt;/b&gt;&lt;br&gt;&lt;small&gt;scheduled check for registration / drop deadlines&lt;/small&gt;" vertex="1">
+          <mxGeometry height="75" width="225" x="760" y="225" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="app" source="aActCourse" style="endArrow=classic;html=1;strokeColor=#475569;strokeWidth=1.5;dashed=1;labelBackgroundColor=default;" target="aPlanner" value="uses">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="data" parent="1" style="swimlane;startSize=30;html=1;fontSize=14;fillColor=#eef7ec;strokeColor=#82b366;fontColor=#2d5a1e;align=left;spacingLeft=10;" value="Data and identity layer (Supabase)" vertex="1">
+          <mxGeometry height="190" width="1000" x="40" y="830" as="geometry" />
+        </mxCell>
+        <mxCell id="logoSupa" parent="data" style="shape=image;html=1;aspect=fixed;image=https://icons.diagrams.net/assets/tabler-outline/1/Brand_Supabase.svg;" value="" vertex="1">
+          <mxGeometry height="24" width="24" x="960" y="3" as="geometry" />
+        </mxCell>
+        <mxCell id="dAuth" parent="data" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;Supabase Auth&lt;/b&gt;&lt;br&gt;&lt;small&gt;email / password accounts, confirmation and reset links, JWT sessions in cookies&lt;/small&gt;" vertex="1">
+          <mxGeometry height="85" width="250" x="15" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="dDb" parent="data" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fontSize=13;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;PostgreSQL&lt;/b&gt;&lt;br&gt;&lt;small&gt;student_courses (live): id, user_id, course_name, course_code, credits, status (completed | in_progress | dropped | failed)&lt;br&gt;planned: courses, prerequisites, programs, plans, profiles, term_deadlines&lt;/small&gt;" vertex="1">
+          <mxGeometry height="130" width="440" x="280" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="dRls" parent="data" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;Row Level Security&lt;/b&gt;&lt;br&gt;&lt;small&gt;select / insert / update / delete policies on student_courses, owner only; planned: role-based access for advisors and admins&lt;/small&gt;" vertex="1">
+          <mxGeometry height="85" width="250" x="735" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="dev" parent="1" style="swimlane;startSize=30;html=1;fontSize=14;fillColor=#fafafa;strokeColor=#999999;fontColor=#333333;align=left;spacingLeft=10;" value="Development and quality" vertex="1">
+          <mxGeometry height="90" width="1000" x="40" y="1110" as="geometry" />
+        </mxCell>
+        <mxCell id="gGit" parent="dev" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#f5f5f5;strokeColor=#666666;" value="&lt;b&gt;GitHub&lt;/b&gt;&lt;br&gt;&lt;small&gt;feature branches, pull requests, code review&lt;/small&gt;" vertex="1">
+          <mxGeometry height="50" width="190" x="15" y="32" as="geometry" />
+        </mxCell>
+        <mxCell id="gTest" parent="dev" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#f5f5f5;strokeColor=#666666;" value="&lt;b&gt;Vitest + Testing Library&lt;/b&gt;&lt;br&gt;&lt;small&gt;139 tests so far: actions, components, routing&lt;/small&gt;" vertex="1">
+          <mxGeometry height="50" width="190" x="215" y="32" as="geometry" />
+        </mxCell>
+        <mxCell id="gLint" parent="dev" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#f5f5f5;strokeColor=#666666;" value="&lt;b&gt;ESLint + TypeScript&lt;/b&gt;&lt;br&gt;&lt;small&gt;lint and type checks&lt;/small&gt;" vertex="1">
+          <mxGeometry height="50" width="190" x="415" y="32" as="geometry" />
+        </mxCell>
+        <mxCell id="gCi" parent="dev" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#666666;dashed=1;" value="&lt;b&gt;GitHub Actions CI&lt;/b&gt;&lt;br&gt;&lt;small&gt;lint, test, build on every PR&lt;/small&gt;" vertex="1">
+          <mxGeometry height="50" width="190" x="615" y="32" as="geometry" />
+        </mxCell>
+        <mxCell id="gEnv" parent="dev" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#f5f5f5;strokeColor=#666666;" value="&lt;b&gt;Environment&lt;/b&gt;&lt;br&gt;&lt;small&gt;.env: Supabase URL and key&lt;/small&gt;" vertex="1">
+          <mxGeometry height="50" width="170" x="815" y="32" as="geometry" />
+        </mxCell>
+        <mxCell id="xMail" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#ffffff;strokeColor=#d79b00;dashed=1;" value="Email provider" vertex="1">
+          <mxGeometry height="50" width="120" x="1220" y="462" as="geometry" />
+        </mxCell>
+        <mxCell id="xCal" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#ffffff;strokeColor=#d79b00;dashed=1;" value="Calendar apps" vertex="1">
+          <mxGeometry height="50" width="120" x="1220" y="642" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="uStudent" style="endArrow=classic;html=1;strokeColor=#475569;strokeWidth=1.5;" target="pres" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="uAdvisor" style="endArrow=classic;html=1;strokeColor=#475569;strokeWidth=1.5;dashed=1;" target="pres" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="uAdmin" style="endArrow=classic;html=1;strokeColor=#475569;strokeWidth=1.5;dashed=1;" target="pres" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="pres" style="endArrow=classic;startArrow=classic;html=1;strokeColor=#475569;strokeWidth=1.5;labelBackgroundColor=default;" target="app" value="HTTPS: page requests, Server Action form posts">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="app" style="endArrow=classic;startArrow=classic;html=1;strokeColor=#475569;strokeWidth=1.5;labelBackgroundColor=default;" target="data" value="supabase-js / @supabase/ssr: JWT, SQL as the signed-in user">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="app" style="endArrow=classic;html=1;strokeColor=#475569;strokeWidth=1.5;dashed=1;labelBackgroundColor=default;" target="xMail" value="reminder emails">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="app" style="endArrow=classic;html=1;strokeColor=#475569;strokeWidth=1.5;dashed=1;labelBackgroundColor=default;" target="xCal" value=".ics file">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lg1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Implemented" vertex="1">
+          <mxGeometry height="28" width="110" x="40" y="1240" as="geometry" />
+        </mxCell>
+        <mxCell id="lg2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fillColor=#ffffff;strokeColor=#6c8ebf;dashed=1;" value="Planned" vertex="1">
+          <mxGeometry height="28" width="110" x="165" y="1240" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
