@@ -12,6 +12,7 @@ export function Navbar() {
           </Link>
 
           <Link href="/courses" className="text-xs font-medium hover:underline">View Courses</Link>
+          <Link href="/plan" className="text-xs font-medium hover:underline">My Plan</Link>
         </div>
           <form action={signOut}>
             <Button type="submit" variant="outline" size="sm">
