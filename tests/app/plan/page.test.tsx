@@ -43,7 +43,7 @@ describe("PlanView", () => {
     it("shows the Generate Plan button without a plan until it is selected", async () => {
         mockSupabase({ data: [], error: null });
 
-        render(await PlanView());
+        render(await PlanView({ searchParams: Promise.resolve({}) }));
 
         expect(screen.getByRole("button", { name: "Generate Plan" })).toBeInTheDocument();
         expect(screen.queryByText("Term 1")).not.toBeInTheDocument();

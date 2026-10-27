@@ -16,9 +16,9 @@ import {
 export default async function PlanView({
     searchParams,
 }: {
-    searchParams?: Promise<{ generate?: string }>;
-} = {}) {
-    const generate = (await searchParams)?.generate === "1";
+    searchParams: Promise<{ generate?: string }>;
+}) {
+    const generate = (await searchParams).generate === "1";
     const supabase = await createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
