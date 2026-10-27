@@ -4,6 +4,7 @@ import { generatePlan } from "@/lib/planner/generate-plan";
 import { createClient } from "@/lib/supabase/server";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
     Card,
     CardContent,
@@ -12,7 +13,12 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 
-export default async function PlanView() {
+export default async function PlanView({
+    searchParams,
+}: {
+    searchParams?: Promise<{ generate?: string }>;
+} = {}) {
+    const generate = (await searchParams)?.generate === "1";
     const supabase = await createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -35,7 +41,8 @@ export default async function PlanView() {
         .filter((course) => course.status === "completed")
         .map((course) => course.course_code);
 
-    const plan = generatePlan(completed);
+    // the plan is only built when the student selects "Generate Plan"
+    const plan = generate && !error ? generatePlan(completed) : null;
 
     return (
         <div className="flex flex-1 flex-col">
@@ -46,6 +53,11 @@ export default async function PlanView() {
                     Remaining required courses, placed after their prerequisites.
                 </p>
 
+                <form action="/plan" method="get" className="mt-4">
+                    <input type="hidden" name="generate" value="1" />
+                    <Button type="submit">Generate Plan</Button>
+                </form>
+
                 {error && (
                     <Alert variant="destructive" className="mt-4">
                         <AlertDescription>
@@ -54,15 +66,15 @@ export default async function PlanView() {
                     </Alert>
                 )}
 
-                {!error && plan.complete && (
-                    <Alert className="mt-4">
+                {plan?.complete && (
+                    <Alert className="mt-4" role="status">
                         <AlertDescription>
                             All requirements are complete. There is nothing left to plan.
                         </AlertDescription>
                     </Alert>
                 )}
 
-                {plan.unschedulable.length > 0 && (
+                {plan && plan.unschedulable.length > 0 && (
                     <Alert variant="destructive" className="mt-4">
                         <AlertDescription>
                             Could not place: {plan.unschedulable.join(", ")}. Check for circular prerequisites.
@@ -70,7 +82,7 @@ export default async function PlanView() {
                     </Alert>
                 )}
 
-                {!error && plan.terms.map((term) => (
+                {plan?.terms.map((term) => (
                     <Card key={term.term} className="mt-5">
                         <CardHeader>
                             <CardTitle>Term {term.term}</CardTitle>

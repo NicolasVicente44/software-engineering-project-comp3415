@@ -75,6 +75,45 @@ describe("generatePlan", () => {
     expect(result.unschedulable).toEqual(["COMP-1000", "COMP-2000"]);
   });
 
+  it("places a diamond dependency after both of its prerequisites", () => {
+    const { terms } = generatePlan([], ["D"], {
+      D: ["B", "C"],
+      B: ["A"],
+      C: ["A"],
+    });
+
+    expect(terms.map((t) => t.courses)).toEqual([["A"], ["B", "C"], ["D"]]);
+  });
+
+  it("places a course once when the required list has duplicates or variant codes", () => {
+    const { terms } = generatePlan([], ["comp1000", "COMP-1000", "Comp_1000"], {});
+
+    expect(terms).toEqual([{ term: 1, courses: ["COMP-1000"] }]);
+  });
+
+  it("reports a course that lists itself as a prerequisite", () => {
+    const result = generatePlan([], ["COMP-1000"], { "COMP-1000": ["COMP-1000"] });
+
+    expect(result.terms).toEqual([]);
+    expect(result.unschedulable).toEqual(["COMP-1000"]);
+  });
+
+  it("keeps the valid terms when only part of the plan is circular", () => {
+    const result = generatePlan([], ["COMP-1000", "COMP-2000", "COMP-3000"], {
+      "COMP-2000": ["COMP-3000"],
+      "COMP-3000": ["COMP-2000"],
+    });
+
+    expect(result.terms).toEqual([{ term: 1, courses: ["COMP-1000"] }]);
+    expect(result.unschedulable).toEqual(["COMP-2000", "COMP-3000"]);
+  });
+
+  it("matches prerequisite map keys regardless of code format", () => {
+    const { terms } = generatePlan([], ["COMP-2000"], { comp2000: ["COMP-1000"] });
+
+    expect(terms.map((t) => t.courses)).toEqual([["COMP-1000"], ["COMP-2000"]]);
+  });
+
   it("uses the program's required courses and prerequisites by default", () => {
     const { terms, complete } = generatePlan([]);
     const placed = allCourses(terms);

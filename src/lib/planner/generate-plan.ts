@@ -22,8 +22,15 @@ export type PlanResult = {
 export function generatePlan(
   completedCodes: string[],
   required: string[] = REQUIRED_COURSES,
-  prereqMap: Record<string, string[]> = PREREQUISITES,
+  rawPrereqMap: Record<string, string[]> = PREREQUISITES,
 ): PlanResult {
+  // normalise the map keys so lookups match normalised course codes
+  const prereqMap: Record<string, string[]> = {};
+  for (const [key, prereqs] of Object.entries(rawPrereqMap)) {
+    const code = normalizeCourseCode(key);
+    prereqMap[code] = [...(prereqMap[code] ?? []), ...prereqs];
+  }
+
   const done = new Set(completedCodes.map(normalizeCourseCode));
 
   // remaining = required courses not completed, plus any prerequisites

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import PlanView from "@/app/plan/page";
 
@@ -15,16 +15,17 @@ vi.mock("next/navigation", () => ({
     redirect,
 }));
 
-const mockSupabase = (result: { data: unknown; error: unknown }) => {
+const mockSupabase = (
+    result: { data: unknown; error: unknown },
+    user: { id: string } | null = { id: "user-1234" }
+) => {
     const eq = vi.fn().mockResolvedValue(result);
     const select = vi.fn().mockReturnValue({ eq });
     const from = vi.fn().mockReturnValue({ select });
 
     createClient.mockResolvedValue({
         auth: {
-            getUser: vi.fn().mockResolvedValue({
-                data: { user: { id: "user-1234" } }
-            })
+            getUser: vi.fn().mockResolvedValue({ data: { user } })
         },
         from
     });
@@ -32,7 +33,25 @@ const mockSupabase = (result: { data: unknown; error: unknown }) => {
     return { from, select, eq };
 };
 
+const generated = { searchParams: Promise.resolve({ generate: "1" }) };
+
 describe("PlanView", () => {
+    beforeEach(() => {
+        redirect.mockReset();
+    });
+
+    it("shows the Generate Plan button without a plan until it is selected", async () => {
+        mockSupabase({ data: [], error: null });
+
+        render(await PlanView());
+
+        expect(screen.getByRole("button", { name: "Generate Plan" })).toBeInTheDocument();
+        expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
+        expect(
+            screen.queryByText("All requirements are complete. There is nothing left to plan.")
+        ).not.toBeInTheDocument();
+    });
+
     it("shows the remaining courses in terms for the logged in user", async () => {
         const { from, eq } = mockSupabase({
             data: [
@@ -43,7 +62,7 @@ describe("PlanView", () => {
             error: null
         });
 
-        render(await PlanView());
+        render(await PlanView(generated));
 
         expect(from).toHaveBeenCalledWith("student_courses");
         expect(eq).toHaveBeenCalledWith("user_id", "user-1234");
@@ -62,7 +81,7 @@ describe("PlanView", () => {
             error: null
         });
 
-        render(await PlanView());
+        render(await PlanView(generated));
 
         expect(
             screen.getByText("All requirements are complete. There is nothing left to plan.")
@@ -70,27 +89,58 @@ describe("PlanView", () => {
         expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
     });
 
-    it("does not count in-progress courses as completed", async () => {
+    it("does not count in-progress, failed or dropped courses as completed", async () => {
         mockSupabase({
-            data: [{ course_code: "COMP-1411", status: "in_progress" }],
+            data: [
+                { course_code: "COMP-1411", status: "in_progress" },
+                { course_code: "COMP-1431", status: "failed" },
+                { course_code: "COMP-2412", status: "dropped" },
+            ],
             error: null
         });
 
-        render(await PlanView());
+        render(await PlanView(generated));
 
+        expect(screen.getByText("COMP-1411")).toBeInTheDocument();
+        expect(screen.getByText("COMP-1431")).toBeInTheDocument();
+        expect(screen.getByText("COMP-2412")).toBeInTheDocument();
+    });
+
+    it("shows a plan for a student with no courses", async () => {
+        mockSupabase({ data: [], error: null });
+
+        render(await PlanView(generated));
+
+        expect(screen.getByText("Term 1")).toBeInTheDocument();
         expect(screen.getByText("COMP-1411")).toBeInTheDocument();
     });
 
-    it("shows an error when the courses cannot be loaded", async () => {
+    it("shows an error and no plan when the courses cannot be loaded", async () => {
         mockSupabase({ data: null, error: { message: "Error in database" } });
         const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
-        render(await PlanView());
+        render(await PlanView(generated));
         consoleError.mockRestore();
 
         expect(
             screen.getByText("Unable to load your courses. Please try again.")
         ).toBeInTheDocument();
         expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
+        expect(
+            screen.queryByText("All requirements are complete. There is nothing left to plan.")
+        ).not.toBeInTheDocument();
+    });
+
+    it("redirects to login when there is no user", async () => {
+        const { from } = mockSupabase({ data: [], error: null }, null);
+        // the real redirect() throws, which stops the page
+        redirect.mockImplementation(() => {
+            throw new Error("NEXT_REDIRECT");
+        });
+
+        await expect(PlanView(generated)).rejects.toThrow("NEXT_REDIRECT");
+
+        expect(redirect).toHaveBeenCalledWith("/login");
+        expect(from).not.toHaveBeenCalled();
     });
 });
