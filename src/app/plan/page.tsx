@@ -36,13 +36,18 @@ export default async function PlanView({
         console.error("Failed to load courses for plan: ", error);
     }
 
-    // only completed courses count towards the plan (us-04)
-    const completed = (courses ?? [])
-        .filter((course) => course.status === "completed")
-        .map((course) => course.course_code);
+    // the plan is built from the student's own courses (us-04): completed
+    // ones count as done, in-progress and failed ones still need to be taken
+    // and dropped ones are ignored
+    const codesWith = (...statuses: string[]) =>
+        (courses ?? [])
+            .filter((course) => statuses.includes(course.status))
+            .map((course) => course.course_code);
+    const completed = codesWith("completed");
+    const toTake = codesWith("in_progress", "failed");
 
     // the plan is only built when the student selects "Generate Plan"
-    const plan = generate && !error ? generatePlan(completed) : null;
+    const plan = generate && !error ? generatePlan(completed, toTake) : null;
 
     return (
         <div className="flex flex-1 flex-col">
@@ -50,7 +55,7 @@ export default async function PlanView({
             <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
                 <h1 className="text-2xl font-semibold">My Academic Plan</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    Remaining required courses, placed after their prerequisites.
+                    Your in-progress and failed courses, placed after their prerequisites.
                 </p>
 
                 <form action="/plan" method="get" className="mt-4">
@@ -69,7 +74,7 @@ export default async function PlanView({
                 {plan?.complete && (
                     <Alert className="mt-4" role="status">
                         <AlertDescription>
-                            All requirements are complete. There is nothing left to plan.
+                            No courses to plan. Add courses as in progress or failed on the Courses page.
                         </AlertDescription>
                     </Alert>
                 )}

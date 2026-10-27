@@ -1,6 +1,5 @@
 import { normalizeCourseCode } from "@/lib/prerequisites/check";
 import { PREREQUISITES } from "@/lib/prerequisites/data";
-import { REQUIRED_COURSES } from "./program";
 
 // one term of the generated plan (us-04)
 export type PlanTerm = {
@@ -11,17 +10,17 @@ export type PlanTerm = {
 // result of generating a plan (us-04)
 export type PlanResult = {
   terms: PlanTerm[];
-  // true when the student has nothing left to take
+  // true when there is nothing left to plan
   complete: boolean;
   // courses that could not be placed (circular prerequisites)
   unschedulable: string[];
 };
 
-// build a term-by-term plan: every remaining required course appears in
-// exactly one term, after all of its prerequisites (us-04)
+// build a term-by-term plan from the courses the student still has to take:
+// each appears in exactly one term, after all of its prerequisites (us-04)
 export function generatePlan(
   completedCodes: string[],
-  required: string[] = REQUIRED_COURSES,
+  required: string[],
   rawPrereqMap: Record<string, string[]> = PREREQUISITES,
 ): PlanResult {
   // normalise the map keys so lookups match normalised course codes

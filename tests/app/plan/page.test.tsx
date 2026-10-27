@@ -34,6 +34,8 @@ const mockSupabase = (
 };
 
 const generated = { searchParams: Promise.resolve({ generate: "1" }) };
+const NOTHING_TO_PLAN =
+    "No courses to plan. Add courses as in progress or failed on the Courses page.";
 
 describe("PlanView", () => {
     beforeEach(() => {
@@ -41,23 +43,26 @@ describe("PlanView", () => {
     });
 
     it("shows the Generate Plan button without a plan until it is selected", async () => {
-        mockSupabase({ data: [], error: null });
+        mockSupabase({
+            data: [{ course_code: "COMP-2477", status: "in_progress" }],
+            error: null
+        });
 
         render(await PlanView({ searchParams: Promise.resolve({}) }));
 
         expect(screen.getByRole("button", { name: "Generate Plan" })).toBeInTheDocument();
         expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
-        expect(
-            screen.queryByText("All requirements are complete. There is nothing left to plan.")
-        ).not.toBeInTheDocument();
+        expect(screen.queryByText(NOTHING_TO_PLAN)).not.toBeInTheDocument();
     });
 
-    it("shows the remaining courses in terms for the logged in user", async () => {
+    it("plans the user's own courses in terms for the logged in user", async () => {
         const { from, eq } = mockSupabase({
             data: [
                 { course_code: "COMP-1411", status: "completed" },
                 { course_code: "COMP-1431", status: "completed" },
                 { course_code: "COMP-2412", status: "completed" },
+                { course_code: "COMP-2477", status: "in_progress" },
+                { course_code: "COMP-3415", status: "in_progress" },
             ],
             error: null
         });
@@ -74,27 +79,12 @@ describe("PlanView", () => {
         expect(screen.getByText("COMP-3415")).toBeInTheDocument();
     });
 
-    it("shows a message when all requirements are complete", async () => {
-        mockSupabase({
-            data: ["COMP-1411", "COMP-1431", "COMP-2412", "COMP-2477", "COMP-3415"]
-                .map((course_code) => ({ course_code, status: "completed" })),
-            error: null
-        });
-
-        render(await PlanView(generated));
-
-        expect(
-            screen.getByText("All requirements are complete. There is nothing left to plan.")
-        ).toBeInTheDocument();
-        expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
-    });
-
-    it("does not count in-progress, failed or dropped courses as completed", async () => {
+    it("includes failed courses and ignores completed and dropped ones", async () => {
         mockSupabase({
             data: [
-                { course_code: "COMP-1411", status: "in_progress" },
-                { course_code: "COMP-1431", status: "failed" },
-                { course_code: "COMP-2412", status: "dropped" },
+                { course_code: "COMP-1411", status: "failed" },
+                { course_code: "COMP-2477", status: "completed" },
+                { course_code: "COMP-1431", status: "dropped" },
             ],
             error: null
         });
@@ -102,17 +92,32 @@ describe("PlanView", () => {
         render(await PlanView(generated));
 
         expect(screen.getByText("COMP-1411")).toBeInTheDocument();
-        expect(screen.getByText("COMP-1431")).toBeInTheDocument();
-        expect(screen.getByText("COMP-2412")).toBeInTheDocument();
+        expect(screen.queryByText("COMP-2477")).not.toBeInTheDocument();
+        expect(screen.queryByText("COMP-1431")).not.toBeInTheDocument();
     });
 
-    it("shows a plan for a student with no courses", async () => {
+    it("shows a message and no terms when there is nothing to plan", async () => {
+        mockSupabase({
+            data: [
+                { course_code: "COMP-1411", status: "completed" },
+                { course_code: "COMP-1431", status: "dropped" },
+            ],
+            error: null
+        });
+
+        render(await PlanView(generated));
+
+        expect(screen.getByText(NOTHING_TO_PLAN)).toBeInTheDocument();
+        expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
+    });
+
+    it("shows the nothing to plan message for a student with no courses", async () => {
         mockSupabase({ data: [], error: null });
 
         render(await PlanView(generated));
 
-        expect(screen.getByText("Term 1")).toBeInTheDocument();
-        expect(screen.getByText("COMP-1411")).toBeInTheDocument();
+        expect(screen.getByText(NOTHING_TO_PLAN)).toBeInTheDocument();
+        expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
     });
 
     it("shows an error and no plan when the courses cannot be loaded", async () => {
@@ -126,9 +131,7 @@ describe("PlanView", () => {
             screen.getByText("Unable to load your courses. Please try again.")
         ).toBeInTheDocument();
         expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
-        expect(
-            screen.queryByText("All requirements are complete. There is nothing left to plan.")
-        ).not.toBeInTheDocument();
+        expect(screen.queryByText(NOTHING_TO_PLAN)).not.toBeInTheDocument();
     });
 
     it("redirects to login when there is no user", async () => {

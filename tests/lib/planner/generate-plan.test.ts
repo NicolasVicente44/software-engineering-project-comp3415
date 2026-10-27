@@ -114,8 +114,16 @@ describe("generatePlan", () => {
     expect(terms.map((t) => t.courses)).toEqual([["COMP-1000"], ["COMP-2000"]]);
   });
 
-  it("uses the program's required courses and prerequisites by default", () => {
-    const { terms, complete } = generatePlan([]);
+  it("reports nothing to plan when the student has no courses to take", () => {
+    expect(generatePlan(["COMP-1000"], [], MAP)).toEqual({
+      terms: [],
+      complete: true,
+      unschedulable: [],
+    });
+  });
+
+  it("uses the program's prerequisites by default", () => {
+    const { terms, complete } = generatePlan([], ["COMP-3415"]);
     const placed = allCourses(terms);
 
     expect(complete).toBe(false);
