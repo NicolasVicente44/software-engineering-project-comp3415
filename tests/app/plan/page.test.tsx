@@ -209,6 +209,26 @@ describe("PlanView", () => {
             expect(screen.getByText("COMP-1000")).toBeInTheDocument();
         });
 
+        it("uses the default credits for a course with no credit value", async () => {
+            mockSupabase(
+                {
+                    data: [
+                        { course_code: "COMP-1000", credits: null, status: "in_progress" },
+                        course("COMP-2000", 0.5),
+                    ],
+                    error: null
+                },
+                undefined,
+                { data: { credit_limit: 0.5 }, error: null }
+            );
+
+            render(await PlanView(generated));
+
+            // at 0.5 credits each, the two courses cannot share a 0.5 limit
+            expect(screen.getByText("Term 2")).toBeInTheDocument();
+            expect(screen.getAllByText(/1 course · 0\.5 of 0\.5 credits/)).toHaveLength(2);
+        });
+
         it("shows an error and no plan when the limit cannot be loaded", async () => {
             mockSupabase(
                 { data: [course("COMP-1000", 1)], error: null },

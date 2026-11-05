@@ -58,8 +58,11 @@ export default async function PlanView({
 
     // course code -> credits, from the student's own courses (us-06)
     const credits: Record<string, number> = {};
+    // a course without a credit value falls back to the planner's default
     for (const course of courses ?? []) {
-        credits[normalizeCourseCode(course.course_code)] = Number(course.credits);
+        if (course.credits != null) {
+            credits[normalizeCourseCode(course.course_code)] = Number(course.credits);
+        }
     }
     // rounded so sums like 0.1 + 0.2 display cleanly
     const termCredits = (codes: string[]) => Number(

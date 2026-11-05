@@ -15,7 +15,7 @@ const allCourses = (terms: { courses: string[] }[]) =>
   terms.flatMap((t) => t.courses);
 
 describe("generatePlan", () => {
-  it("AC1: every remaining required course appears in exactly one term", () => {
+  it("US-04 AC1: every remaining required course appears in exactly one term", () => {
     const { terms } = generatePlan(["COMP-1000"], REQUIRED, MAP);
     const placed = allCourses(terms);
 
@@ -23,7 +23,7 @@ describe("generatePlan", () => {
     expect(new Set(placed).size).toBe(placed.length);
   });
 
-  it("AC2: places a course in a later term than its prerequisite", () => {
+  it("US-04 AC2: places a course in a later term than its prerequisite", () => {
     const { terms } = generatePlan([], REQUIRED, MAP);
     const termOf = (code: string) =>
       terms.find((t) => t.courses.includes(code))!.term;
@@ -32,7 +32,7 @@ describe("generatePlan", () => {
     expect(termOf("COMP-3000")).toBeGreaterThan(termOf("COMP-2000"));
   });
 
-  it("AC3: reports that requirements are complete when nothing remains", () => {
+  it("US-04 AC3: reports that requirements are complete when nothing remains", () => {
     const result = generatePlan(REQUIRED, REQUIRED, MAP);
 
     expect(result).toEqual({ terms: [], complete: true, unschedulable: [], overLimit: [] });
@@ -145,7 +145,7 @@ const termCredits = (courses: string[], credits: Record<string, number>) =>
   courses.reduce((sum, code) => sum + (credits[code] ?? DEFAULT_COURSE_CREDITS), 0);
 
 describe("generatePlan with a credit limit (us-06)", () => {
-  it("AC1: no term has more credits than the limit", () => {
+  it("US-06 AC1: no term has more credits than the limit", () => {
     const credits = { ...FULL, "COMP-1500": 0.5, "COMP-2500": 0.5 };
     const { terms } = generatePlan([], Object.keys(credits), {}, {
       creditLimit: 2.5,
@@ -158,7 +158,7 @@ describe("generatePlan with a credit limit (us-06)", () => {
     expect(allCourses(terms)).toHaveLength(6);
   });
 
-  it("AC2: moves a ready course to the next term once the limit is reached", () => {
+  it("US-06 AC2: moves a ready course to the next term once the limit is reached", () => {
     const { terms } = generatePlan([], Object.keys(FULL), {}, {
       creditLimit: 2,
       credits: FULL,
@@ -170,7 +170,7 @@ describe("generatePlan with a credit limit (us-06)", () => {
     ]);
   });
 
-  it("AC2: fills leftover room with a smaller course that still fits", () => {
+  it("US-06 AC2: fills leftover room with a smaller course that still fits", () => {
     const credits = { "COMP-1000": 1, "COMP-2000": 1, "COMP-3000": 0.5 };
     const { terms } = generatePlan([], Object.keys(credits), {}, {
       creditLimit: 1.5,
@@ -183,7 +183,7 @@ describe("generatePlan with a credit limit (us-06)", () => {
     ]);
   });
 
-  it("AC3: every term is at or under a lowered limit", () => {
+  it("US-06 AC3: every term is at or under a lowered limit", () => {
     const required = Object.keys(FULL);
     const before = generatePlan([], required, {}, { creditLimit: 4, credits: FULL });
     const after = generatePlan([], required, {}, { creditLimit: 1, credits: FULL });
@@ -247,6 +247,35 @@ describe("generatePlan with a credit limit (us-06)", () => {
       ["COMP-2000"],
     ]);
     expect(result.overLimit).toEqual(["COMP-2000"]);
+  });
+
+  it("gives an over-limit course that comes first its own term while the rest wait", () => {
+    const credits = { "COMP-1000": 2, "COMP-2000": 0.5, "COMP-3000": 0.5 };
+    const result = generatePlan([], Object.keys(credits), {}, {
+      creditLimit: 1,
+      credits,
+    });
+
+    expect(result.terms.map((t) => t.courses)).toEqual([
+      ["COMP-1000"],
+      ["COMP-2000", "COMP-3000"],
+    ]);
+    expect(result.overLimit).toEqual(["COMP-1000"]);
+  });
+
+  it("starts the longest prerequisite chain first when the limit is tight", () => {
+    const { terms } = generatePlan(
+      [],
+      ["AAAA-1000", "BBBB-1000", "COMP-3000"],
+      MAP,
+      { creditLimit: 2, credits: { ...FULL, "AAAA-1000": 1, "BBBB-1000": 1 } },
+    );
+
+    expect(terms.map((t) => t.courses)).toEqual([
+      ["AAAA-1000", "COMP-1000"],
+      ["BBBB-1000", "COMP-2000"],
+      ["COMP-3000"],
+    ]);
   });
 
   it("has no limit when none is given", () => {

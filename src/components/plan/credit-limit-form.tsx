@@ -21,7 +21,7 @@ export function CreditLimitForm({ action, creditLimit }: CreditLimitFormProps) {
         <form action={formAction} noValidate className="flex flex-col gap-2">
             <Label htmlFor="credit_limit">Credit limit per term</Label>
             <div className="flex gap-2">
-                <Input id="credit_limit" name="credit_limit" type="number" required min="0" step="0.5" defaultValue={creditLimit} className="w-28"/>
+                <Input id="credit_limit" name="credit_limit" type="number" required min="0" step="0.01" defaultValue={creditLimit} className="w-28"/>
                 <Button type="submit" variant="outline" disabled={pending}>
                     {pending ? "Saving..." : "Save Limit"}
                 </Button>

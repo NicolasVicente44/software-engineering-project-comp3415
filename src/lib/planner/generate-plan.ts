@@ -75,13 +75,36 @@ export function generatePlan(
     return { terms: [], complete: true, unschedulable: [], overLimit: [] };
   }
 
+  // course -> remaining courses that list it as a prerequisite
+  const dependents: Record<string, string[]> = {};
+  for (const code of remaining) {
+    for (const prereq of prereqMap[code] ?? []) {
+      const p = normalizeCourseCode(prereq);
+      dependents[p] = [...(dependents[p] ?? []), code];
+    }
+  }
+
+  // length of the longest chain of courses waiting on this one; when the
+  // credit limit leaves no room for every ready course, the longest chains
+  // start first so the plan is not stretched out (us-06)
+  const chainLengths: Record<string, number> = {};
+  const chainLength = (code: string): number => {
+    if (code in chainLengths) return chainLengths[code];
+    // marks the course while visiting so circular prerequisites stop here
+    chainLengths[code] = 0;
+    const longest = Math.max(0, ...(dependents[code] ?? []).map((d) => chainLength(d) + 1));
+    chainLengths[code] = longest;
+    return longest;
+  };
+
   const terms: PlanTerm[] = [];
   const overLimit: string[] = [];
   while (remaining.size > 0) {
-    // a course is ready when all of its prerequisites are done
+    // a course is ready when all of its prerequisites are done; longest
+    // chain first, then by course code
     const ready = [...remaining]
       .filter((code) => (prereqMap[code] ?? []).every((p) => done.has(normalizeCourseCode(p))))
-      .sort();
+      .sort((a, b) => chainLength(b) - chainLength(a) || a.localeCompare(b));
 
     // nothing is ready but courses remain: circular prerequisites
     if (ready.length === 0) {
@@ -104,14 +127,15 @@ export function generatePlan(
         used += courseCredits;
       } else if (placed.length === 0) {
         // too big for any term: give it a term of its own so the plan
-        // can still finish, and report it
+        // can still finish, and report it. this is the one case where a
+        // term goes over the limit, and the plan page warns about it
         placed.push(code);
         overLimit.push(code);
         break;
       }
     }
 
-    terms.push({ term: terms.length + 1, courses: placed });
+    terms.push({ term: terms.length + 1, courses: [...placed].sort() });
     placed.forEach((code) => {
       remaining.delete(code);
       done.add(code);
