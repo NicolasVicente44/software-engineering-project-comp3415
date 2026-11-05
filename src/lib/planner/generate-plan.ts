@@ -37,6 +37,9 @@ export type PlanOptions = {
 // small tolerance so 0.1 + 0.2 style sums still fit exactly at the limit
 const EPSILON = 1e-9;
 
+// orders course codes the same way everywhere in the plan
+const byCode = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
 // build a term-by-term plan from the courses the student still has to take:
 // each appears in exactly one term, after all of its prerequisites (us-04),
 // and no term goes over the credit limit (us-06)
@@ -90,7 +93,9 @@ export function generatePlan(
   const chainLengths: Record<string, number> = {};
   const chainLength = (code: string): number => {
     if (code in chainLengths) return chainLengths[code];
-    // marks the course while visiting so circular prerequisites stop here
+    // marks the course while visiting so circular prerequisites stop here.
+    // inside a cycle the lengths are only approximate, which is fine since
+    // those courses end up unschedulable anyway
     chainLengths[code] = 0;
     const longest = Math.max(0, ...(dependents[code] ?? []).map((d) => chainLength(d) + 1));
     chainLengths[code] = longest;
@@ -104,7 +109,7 @@ export function generatePlan(
     // chain first, then by course code
     const ready = [...remaining]
       .filter((code) => (prereqMap[code] ?? []).every((p) => done.has(normalizeCourseCode(p))))
-      .sort((a, b) => chainLength(b) - chainLength(a) || a.localeCompare(b));
+      .sort((a, b) => chainLength(b) - chainLength(a) || byCode(a, b));
 
     // nothing is ready but courses remain: circular prerequisites
     if (ready.length === 0) {
@@ -135,7 +140,7 @@ export function generatePlan(
       }
     }
 
-    terms.push({ term: terms.length + 1, courses: [...placed].sort() });
+    terms.push({ term: terms.length + 1, courses: [...placed].sort(byCode) });
     placed.forEach((code) => {
       remaining.delete(code);
       done.add(code);

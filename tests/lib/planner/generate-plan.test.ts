@@ -111,6 +111,17 @@ describe("generatePlan", () => {
     expect(result.unschedulable).toEqual(["COMP-2000", "COMP-3000"]);
   });
 
+  it("plans the courses before a cycle and reports the cycle", () => {
+    // COMP-1000 leads into COMP-2000 <-> COMP-3000
+    const result = generatePlan([], ["COMP-1000", "COMP-2000", "COMP-3000"], {
+      "COMP-2000": ["COMP-1000", "COMP-3000"],
+      "COMP-3000": ["COMP-2000"],
+    }, { creditLimit: 1, credits: { "COMP-1000": 0.5 } });
+
+    expect(result.terms).toEqual([{ term: 1, courses: ["COMP-1000"] }]);
+    expect(result.unschedulable).toEqual(["COMP-2000", "COMP-3000"]);
+  });
+
   it("matches prerequisite map keys regardless of code format", () => {
     const { terms } = generatePlan([], ["COMP-2000"], { comp2000: ["COMP-1000"] });
 
