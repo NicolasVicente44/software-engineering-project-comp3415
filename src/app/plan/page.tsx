@@ -1,6 +1,13 @@
 import { redirect } from "next/navigation";
 import { Navbar } from "@/components/navbar";
-import { generatePlan } from "@/lib/planner/generate-plan";
+import { CreditLimitForm } from "@/components/plan/credit-limit-form";
+import {
+    DEFAULT_COURSE_CREDITS,
+    DEFAULT_CREDIT_LIMIT,
+    generatePlan,
+} from "@/lib/planner/generate-plan";
+import { normalizeCourseCode } from "@/lib/prerequisites/check";
+import { saveCreditLimit } from "@/lib/settings/actions";
 import { createClient } from "@/lib/supabase/server";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -29,12 +36,35 @@ export default async function PlanView({
 
     const { data: courses, error } = await supabase
         .from("student_courses")
-        .select("course_code, status")
+        .select("course_code, credits, status")
         .eq("user_id", user.id);
 
     if (error) {
         console.error("Failed to load courses for plan: ", error);
     }
+
+    // the student's saved credit limit, or the default if none is saved (us-06)
+    const { data: settings, error: settingsError } = await supabase
+        .from("student_settings")
+        .select("credit_limit")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+    if (settingsError) {
+        console.error("Failed to load credit limit for plan: ", settingsError);
+    }
+
+    const creditLimit = Number(settings?.credit_limit ?? DEFAULT_CREDIT_LIMIT);
+
+    // course code -> credits, from the student's own courses (us-06)
+    const credits: Record<string, number> = {};
+    for (const course of courses ?? []) {
+        credits[normalizeCourseCode(course.course_code)] = Number(course.credits);
+    }
+    // rounded so sums like 0.1 + 0.2 display cleanly
+    const termCredits = (codes: string[]) => Number(
+        codes.reduce((sum, code) => sum + (credits[code] ?? DEFAULT_COURSE_CREDITS), 0).toFixed(2)
+    );
 
     // the plan is built from the student's own courses (us-04): completed
     // ones count as done, in-progress and failed ones still need to be taken
@@ -47,7 +77,9 @@ export default async function PlanView({
     const toTake = codesWith("in_progress", "failed");
 
     // the plan is only built when the student selects "Generate Plan"
-    const plan = generate && !error ? generatePlan(completed, toTake) : null;
+    const plan = generate && !error && !settingsError
+        ? generatePlan(completed, toTake, undefined, { creditLimit, credits })
+        : null;
 
     return (
         <div className="flex flex-1 flex-col">
@@ -55,18 +87,33 @@ export default async function PlanView({
             <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
                 <h1 className="text-2xl font-semibold">My Academic Plan</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    Your in-progress and failed courses, placed after their prerequisites.
+                    Your in-progress and failed courses, placed after their prerequisites
+                    and kept within your credit limit.
                 </p>
 
-                <form action="/plan" method="get" className="mt-4">
-                    <input type="hidden" name="generate" value="1" />
-                    <Button type="submit">Generate Plan</Button>
-                </form>
+                <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+                    <form action="/plan" method="get">
+                        <input type="hidden" name="generate" value="1" />
+                        <Button type="submit">Generate Plan</Button>
+                    </form>
+
+                    {!settingsError && (
+                        <CreditLimitForm action={saveCreditLimit} creditLimit={creditLimit} />
+                    )}
+                </div>
 
                 {error && (
                     <Alert variant="destructive" className="mt-4">
                         <AlertDescription>
                             Unable to load your courses. Please try again.
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {settingsError && (
+                    <Alert variant="destructive" className="mt-4">
+                        <AlertDescription>
+                            Unable to load your credit limit. Please try again.
                         </AlertDescription>
                     </Alert>
                 )}
@@ -87,12 +134,22 @@ export default async function PlanView({
                     </Alert>
                 )}
 
+                {plan && plan.overLimit.length > 0 && (
+                    <Alert className="mt-4" role="status">
+                        <AlertDescription>
+                            Over your {creditLimit} credit limit on their own, so each has a term to itself: {plan.overLimit.join(", ")}.
+                        </AlertDescription>
+                    </Alert>
+                )}
+
                 {plan?.terms.map((term) => (
                     <Card key={term.term} className="mt-5">
                         <CardHeader>
                             <CardTitle>Term {term.term}</CardTitle>
                             <CardDescription>
                                 {term.courses.length} course{term.courses.length === 1 ? "" : "s"}
+                                {" · "}
+                                {termCredits(term.courses)} of {creditLimit} credits
                             </CardDescription>
                         </CardHeader>
                         <CardContent>

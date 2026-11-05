@@ -15,13 +15,26 @@ vi.mock("next/navigation", () => ({
     redirect,
 }));
 
+// the credit limit form is a client component tested on its own
+vi.mock("@/components/plan/credit-limit-form", () => ({
+    CreditLimitForm: ({ creditLimit }: { creditLimit: number }) => (
+        <p>Credit limit form: {creditLimit}</p>
+    ),
+}));
+
 const mockSupabase = (
     result: { data: unknown; error: unknown },
-    user: { id: string } | null = { id: "user-1234" }
+    user: { id: string } | null = { id: "user-1234" },
+    settings: { data: unknown; error: unknown } = { data: null, error: null }
 ) => {
     const eq = vi.fn().mockResolvedValue(result);
     const select = vi.fn().mockReturnValue({ eq });
-    const from = vi.fn().mockReturnValue({ select });
+    const maybeSingle = vi.fn().mockResolvedValue(settings);
+    const settingsEq = vi.fn().mockReturnValue({ maybeSingle });
+    const settingsSelect = vi.fn().mockReturnValue({ eq: settingsEq });
+    const from = vi.fn((table: string) =>
+        table === "student_settings" ? { select: settingsSelect } : { select }
+    );
 
     createClient.mockResolvedValue({
         auth: {
@@ -30,7 +43,7 @@ const mockSupabase = (
         from
     });
 
-    return { from, select, eq };
+    return { from, select, eq, settingsEq };
 };
 
 const generated = { searchParams: Promise.resolve({ generate: "1" }) };
@@ -145,5 +158,73 @@ describe("PlanView", () => {
 
         expect(redirect).toHaveBeenCalledWith("/login");
         expect(from).not.toHaveBeenCalled();
+    });
+
+    describe("credit limit (us-06)", () => {
+        const course = (course_code: string, credits: number, status = "in_progress") =>
+            ({ course_code, credits, status });
+
+        it("uses the default limit when the student has not saved one", async () => {
+            const { settingsEq } = mockSupabase({
+                data: [course("COMP-1000", 1), course("COMP-2000", 1), course("COMP-3000", 1)],
+                error: null
+            });
+
+            render(await PlanView(generated));
+
+            expect(settingsEq).toHaveBeenCalledWith("user_id", "user-1234");
+            expect(screen.getByText("Credit limit form: 2.5")).toBeInTheDocument();
+            // 3 x 1.0 credits do not fit under 2.5, so the third waits a term
+            expect(screen.getByText("Term 2")).toBeInTheDocument();
+            expect(screen.getByText(/2 courses · 2 of 2\.5 credits/)).toBeInTheDocument();
+        });
+
+        it("keeps every term at or under the student's saved limit", async () => {
+            mockSupabase(
+                {
+                    data: [course("COMP-1000", 0.5), course("COMP-2000", 0.5), course("COMP-3000", 0.5)],
+                    error: null
+                },
+                undefined,
+                { data: { credit_limit: 1 }, error: null }
+            );
+
+            render(await PlanView(generated));
+
+            expect(screen.getByText("Credit limit form: 1")).toBeInTheDocument();
+            expect(screen.getByText(/2 courses · 1 of 1 credits/)).toBeInTheDocument();
+            expect(screen.getByText(/1 course · 0\.5 of 1 credits/)).toBeInTheDocument();
+        });
+
+        it("warns about a course worth more than the limit", async () => {
+            mockSupabase(
+                { data: [course("COMP-1000", 1.5)], error: null },
+                undefined,
+                { data: { credit_limit: 1 }, error: null }
+            );
+
+            render(await PlanView(generated));
+
+            expect(screen.getByText(/Over your 1 credit limit on their own/)).toBeInTheDocument();
+            expect(screen.getByText("COMP-1000")).toBeInTheDocument();
+        });
+
+        it("shows an error and no plan when the limit cannot be loaded", async () => {
+            mockSupabase(
+                { data: [course("COMP-1000", 1)], error: null },
+                undefined,
+                { data: null, error: { message: "Error in database" } }
+            );
+            const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+            render(await PlanView(generated));
+            consoleError.mockRestore();
+
+            expect(
+                screen.getByText("Unable to load your credit limit. Please try again.")
+            ).toBeInTheDocument();
+            expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
+            expect(screen.queryByText(/Credit limit form/)).not.toBeInTheDocument();
+        });
     });
 });
