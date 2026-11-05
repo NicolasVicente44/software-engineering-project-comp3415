@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { generatePlan } from "@/lib/planner/generate-plan";
+import {
+  DEFAULT_COURSE_CREDITS,
+  generatePlan,
+} from "@/lib/planner/generate-plan";
 
 // A -> B -> C chain, plus an independent course D
 const MAP = {
@@ -32,7 +35,7 @@ describe("generatePlan", () => {
   it("AC3: reports that requirements are complete when nothing remains", () => {
     const result = generatePlan(REQUIRED, REQUIRED, MAP);
 
-    expect(result).toEqual({ terms: [], complete: true, unschedulable: [] });
+    expect(result).toEqual({ terms: [], complete: true, unschedulable: [], overLimit: [] });
   });
 
   it("puts courses with no unmet prerequisites together in the first term", () => {
@@ -119,6 +122,7 @@ describe("generatePlan", () => {
       terms: [],
       complete: true,
       unschedulable: [],
+      overLimit: [],
     });
   });
 
@@ -132,5 +136,125 @@ describe("generatePlan", () => {
       terms.find((t) => t.courses.includes(code))!.term;
     expect(termOf("COMP-3415")).toBeGreaterThan(termOf("COMP-2412"));
     expect(termOf("COMP-3415")).toBeGreaterThan(termOf("COMP-2477"));
+  });
+});
+
+// independent courses (no prerequisites) worth 1.0 credits each
+const FULL = { "COMP-1000": 1, "COMP-2000": 1, "COMP-3000": 1, "COMP-4000": 1 };
+const termCredits = (courses: string[], credits: Record<string, number>) =>
+  courses.reduce((sum, code) => sum + (credits[code] ?? DEFAULT_COURSE_CREDITS), 0);
+
+describe("generatePlan with a credit limit (us-06)", () => {
+  it("AC1: no term has more credits than the limit", () => {
+    const credits = { ...FULL, "COMP-1500": 0.5, "COMP-2500": 0.5 };
+    const { terms } = generatePlan([], Object.keys(credits), {}, {
+      creditLimit: 2.5,
+      credits,
+    });
+
+    for (const term of terms) {
+      expect(termCredits(term.courses, credits)).toBeLessThanOrEqual(2.5);
+    }
+    expect(allCourses(terms)).toHaveLength(6);
+  });
+
+  it("AC2: moves a ready course to the next term once the limit is reached", () => {
+    const { terms } = generatePlan([], Object.keys(FULL), {}, {
+      creditLimit: 2,
+      credits: FULL,
+    });
+
+    expect(terms.map((t) => t.courses)).toEqual([
+      ["COMP-1000", "COMP-2000"],
+      ["COMP-3000", "COMP-4000"],
+    ]);
+  });
+
+  it("AC2: fills leftover room with a smaller course that still fits", () => {
+    const credits = { "COMP-1000": 1, "COMP-2000": 1, "COMP-3000": 0.5 };
+    const { terms } = generatePlan([], Object.keys(credits), {}, {
+      creditLimit: 1.5,
+      credits,
+    });
+
+    expect(terms.map((t) => t.courses)).toEqual([
+      ["COMP-1000", "COMP-3000"],
+      ["COMP-2000"],
+    ]);
+  });
+
+  it("AC3: every term is at or under a lowered limit", () => {
+    const required = Object.keys(FULL);
+    const before = generatePlan([], required, {}, { creditLimit: 4, credits: FULL });
+    const after = generatePlan([], required, {}, { creditLimit: 1, credits: FULL });
+
+    expect(before.terms).toHaveLength(1);
+    expect(after.terms).toHaveLength(4);
+    for (const term of after.terms) {
+      expect(termCredits(term.courses, FULL)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("still places a course after its prerequisites under a limit", () => {
+    const { terms } = generatePlan([], REQUIRED, MAP, {
+      creditLimit: 1,
+      credits: FULL,
+    });
+    const termOf = (code: string) =>
+      terms.find((t) => t.courses.includes(code))!.term;
+
+    expect(termOf("COMP-2000")).toBeGreaterThan(termOf("COMP-1000"));
+    expect(termOf("COMP-3000")).toBeGreaterThan(termOf("COMP-2000"));
+    expect(allCourses(terms).sort()).toEqual(REQUIRED);
+  });
+
+  it("allows a term to land exactly on the limit despite rounding", () => {
+    const credits = { "COMP-1000": 0.1, "COMP-2000": 0.2, "COMP-3000": 0.3 };
+    const { terms } = generatePlan([], Object.keys(credits), {}, {
+      creditLimit: 0.6,
+      credits,
+    });
+
+    expect(terms).toHaveLength(1);
+  });
+
+  it("uses the default credits for a course with no known credit value", () => {
+    const { terms } = generatePlan([], ["COMP-1000", "COMP-2000"], {}, {
+      creditLimit: DEFAULT_COURSE_CREDITS,
+    });
+
+    expect(terms.map((t) => t.courses)).toEqual([["COMP-1000"], ["COMP-2000"]]);
+  });
+
+  it("matches credit keys regardless of code format", () => {
+    const { terms } = generatePlan([], ["COMP-1000", "COMP-2000"], {}, {
+      creditLimit: 1,
+      credits: { comp1000: 1, Comp_2000: 1 },
+    });
+
+    expect(terms).toHaveLength(2);
+  });
+
+  it("gives a course over the limit a term of its own and reports it", () => {
+    const credits = { "COMP-1000": 0.5, "COMP-2000": 2, "COMP-3000": 0.5 };
+    const result = generatePlan([], Object.keys(credits), {}, {
+      creditLimit: 1,
+      credits,
+    });
+
+    expect(result.terms.map((t) => t.courses)).toEqual([
+      ["COMP-1000", "COMP-3000"],
+      ["COMP-2000"],
+    ]);
+    expect(result.overLimit).toEqual(["COMP-2000"]);
+  });
+
+  it("has no limit when none is given", () => {
+    const { terms, overLimit } = generatePlan([], Object.keys(FULL), {}, {
+      credits: FULL,
+    });
+
+    expect(terms).toHaveLength(1);
+    expect(overLimit).toEqual([]);
   });
 });
