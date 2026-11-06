@@ -158,7 +158,7 @@ export async function createCourse(_previousState: CourseActionState, formData: 
             };
         }
 
-        const result = checkPrerequisites(courseCode, studentCourses ?? []);
+        const result = checkPrerequisites(courseCode, studentCourses ?? [], {[normalizeCourseCode(courseCode)]: prerequisites});
         if (!result.eligible) {
             return {
                 error: `Missing prerequisites: ${result.missing.join(", ")}`
@@ -277,6 +277,30 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
             error: "Please select a valid course status."
         };
     }
+
+    // only run prereq validation when course is in progress
+    if (status === "in_progress") {
+        const { data: studentCourses, error: queryError } = await supabase
+            .from("student_courses")
+            .select("course_code, status")
+            .eq("user_id", user.id);
+        
+        if(queryError) {
+            console.error("Failed to check prerequistites", queryError);
+            return {
+                error: "Could not check prerequisites. Please try again."
+            };
+        }
+
+        const result = checkPrerequisites(courseCode, studentCourses ?? [], {[normalizeCourseCode(courseCode)]: prerequisites});
+        if (!result.eligible) {
+            return {
+                error: `Missing prerequisites: ${result.missing.join(", ")}`
+            };
+        }
+    }
+
+    // ADD A CHECK HERE TO PREVENT COMPLETED COURSES BEING SET TO OTHER STATUSES IF A DIFFERENT COURSE DEPENDS ON IT
 
     // Update only the course belonging to the logged-in user
     const { data, error } = await supabase

@@ -75,7 +75,11 @@ describe("PlanView", () => {
                 { course_code: "COMP-1431", status: "completed" },
                 { course_code: "COMP-2412", status: "completed" },
                 { course_code: "COMP-2477", status: "in_progress" },
-                { course_code: "COMP-3415", status: "in_progress" },
+                {
+                    course_code: "COMP-3415",
+                    status: "in_progress",
+                    prerequisites: ["COMP-2477"]
+                },
             ],
             error: null
         });

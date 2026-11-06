@@ -36,7 +36,7 @@ export default async function PlanView({
 
     const { data: courses, error } = await supabase
         .from("student_courses")
-        .select("course_code, credits, status")
+        .select("course_code, credits, status, prerequisites")
         .eq("user_id", user.id);
 
     if (error) {
@@ -64,6 +64,17 @@ export default async function PlanView({
             credits[normalizeCourseCode(course.course_code)] = Number(course.credits);
         }
     }
+
+    // build the prereq map for each course to check against 
+    const prereqMap: Record<string, string[]> = {};
+
+    for (const course of courses ?? []) {
+        const code = normalizeCourseCode(course.course_code);
+
+        prereqMap[code] = (course.prerequisites ?? [])
+            .map(normalizeCourseCode);
+    }
+
     // rounded so sums like 0.1 + 0.2 display cleanly
     const termCredits = (codes: string[]) => Number(
         codes.reduce((sum, code) => sum + (credits[code] ?? DEFAULT_COURSE_CREDITS), 0).toFixed(2)
@@ -81,7 +92,7 @@ export default async function PlanView({
 
     // the plan is only built when the student selects "Generate Plan"
     const plan = generate && !error && !settingsError
-        ? generatePlan(completed, toTake, undefined, { creditLimit, credits })
+        ? generatePlan(completed, toTake, prereqMap, { creditLimit, credits })
         : null;
 
     return (
