@@ -47,4 +47,16 @@ export function findDependentCourses(
     .map(course => course.course_code);
 }
 
+// receives student courses and prerequisites and finds what prereqs havent actually been added to their course list yet
+export function findMissingPrerequisitesInCourseList(
+  prerequisites: string[],
+  studentCourses: {course_code: string;}[]
+): string[] {
+
+    const existingCourseCodes = new Set(
+        studentCourses.map(course => normalizeCourseCode(course.course_code))
+    );
+
+    return prerequisites.filter(code => !existingCourseCodes.has(normalizeCourseCode(code)));
+  }
 

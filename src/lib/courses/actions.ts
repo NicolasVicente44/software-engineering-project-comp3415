@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { checkPrerequisites, normalizeCourseCode, findDependentCourses} from "@/lib/prerequisites/check";
+import { checkPrerequisites, normalizeCourseCode, findDependentCourses, findMissingPrerequisitesInCourseList} from "@/lib/prerequisites/check";
 
 export type CourseActionState = {
     error?: string;
@@ -14,25 +14,14 @@ function parsePrerequisites(value: string): string[] {
     return value.split(",").map(code => normalizeCourseCode(code)).filter(code => code !== "");
 }
 
-// looks through the student's existing courses and returns only the prerequisites that are not in the course list already
-async function findMissingPrerequisitesInCourseList(userId: string, prerequisites: string[]): Promise<string [] | null> {
+// fetches the students courses with their prereqs to be used in later functions
+async function getStudentCoursesForPrerequisites(userId: string) {
     const supabase = await createClient();
 
-    const { data: studentCourses, error} = await supabase
+    return supabase
         .from("student_courses")
-        .select("course_code")
+        .select("course_code, prerequisites")
         .eq("user_id", userId);
-
-    if(error) {
-        console.error("Failed to load courses: ", error);
-        return null;
-    }
-
-    const existingCourseCodes = new Set(
-        (studentCourses ?? []).map(course => normalizeCourseCode(course.course_code))
-    );
-
-    return prerequisites.filter(code => !existingCourseCodes.has(code));
 }
 
 // get the required info for findDependentCourses to be able to search for the courses that an attempted deleted course is needed for
@@ -110,13 +99,20 @@ export async function createCourse(_previousState: CourseActionState, formData: 
         }
     }
 
-    const missingPrerequisites = await findMissingPrerequisitesInCourseList(user.id, prerequisites);
+    const { data: studentCourses, error: queryError } =
+        await getStudentCoursesForPrerequisites(user.id);
 
-    if (missingPrerequisites === null) { // database error while fetching the prerequisites
+    if (queryError) {
+        console.error("Failed to load courses: ", queryError);
         return {
             error: "There was an issue with validating your prerequisites. Please try again."
         };
     }
+
+    const missingPrerequisites = findMissingPrerequisitesInCourseList(
+        prerequisites,
+        studentCourses ?? []
+    );
 
     // any prerequisite found here is not in the course list already, and needs to be added first
     if (missingPrerequisites.length > 0) {
@@ -237,13 +233,20 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
         }
     }
 
-    const missingPrerequisites = await findMissingPrerequisitesInCourseList(user.id, prerequisites);
+    const { data: studentCourses, error: queryError } =
+        await getStudentCoursesForPrerequisites(user.id);
 
-    if (missingPrerequisites === null) {
+    if (queryError) {
+        console.error("Failed to load courses: ", queryError);
         return {
             error: "There was an issue with validating your prerequisites. Please try again."
         };
     }
+
+    const missingPrerequisites = findMissingPrerequisitesInCourseList(
+        prerequisites,
+        studentCourses ?? []
+    );
 
     if (missingPrerequisites.length > 0) {
         return {
