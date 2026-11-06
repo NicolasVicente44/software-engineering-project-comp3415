@@ -23,9 +23,10 @@ export function CourseCard({course}: CourseCardProps) {
     const initialState: CourseActionState = {};
 
     const [state, formAction, pending] = useActionState(
-        async (previousState: CourseActionState) => {
+        async (previousState: CourseActionState, formData: FormData) => {
             void previousState;
-            return await deleteCourse(course.id);
+            const confirmed = formData.get("confirmed") === "true";
+            return await deleteCourse(course.id, confirmed);
         },
         initialState
     );
@@ -48,7 +49,7 @@ export function CourseCard({course}: CourseCardProps) {
                     Edit Course
                 </Link>
 
-                <CourseDeleteButton courseName={course.course_name} formAction={formAction} pending={pending}/>
+                <CourseDeleteButton courseId={course.id} courseName={course.course_name} formAction={formAction} pending={pending}/>
             </div>
             </CardContent>
 

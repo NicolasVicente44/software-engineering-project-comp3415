@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { checkPrerequisites, normalizeCourseCode } from "@/lib/prerequisites/check";
+import { checkPrerequisites, normalizeCourseCode, findDependentCourses} from "@/lib/prerequisites/check";
 
 export type CourseActionState = {
     error?: string;
@@ -33,6 +33,36 @@ async function findMissingPrerequisitesInCourseList(userId: string, prerequisite
     );
 
     return prerequisites.filter(code => !existingCourseCodes.has(code));
+}
+
+// get the required info for findDependentCourses to be able to search for the courses that an attempted deleted course is needed for
+export async function getAnyDependentCourses(courseId: string): Promise<string[] | null> {
+    const supabase = await createClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if(!user || !courseId.trim()) {
+        return null;
+    }
+
+    const { data: studentCourses, error} = await supabase
+        .from("student_courses")
+        .select("id, course_code, prerequisites")
+        .eq("user_id", user.id);
+
+    if (error) {
+        console.error("Failed to load courses: ", error);
+        return null;
+    }
+
+    const targetCourse = studentCourses?.find(course => course.id === courseId);
+
+    if (!targetCourse) {
+        return null;
+    }
+
+    return findDependentCourses(targetCourse.course_code, studentCourses ?? []);
+
 }
 
 export async function createCourse(_previousState: CourseActionState, formData: FormData) {
@@ -280,7 +310,7 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
     redirect("/courses");
 }
 
-export async function deleteCourse(courseId: string): Promise<CourseActionState>  {
+export async function deleteCourse(courseId: string, confirmed: boolean = false): Promise<CourseActionState>  {
     const supabase = await createClient();
     const {data: { user }} = await supabase.auth.getUser();
 
@@ -293,6 +323,20 @@ export async function deleteCourse(courseId: string): Promise<CourseActionState>
     if (!courseId || courseId.trim() === "") {
         return {
             error: "A course ID is required."
+        };
+    }
+
+    const dependentCourses = await getAnyDependentCourses(courseId);
+
+    if (dependentCourses === null) {
+        return {
+            error: "There was an issue with verifying your dependencies. Please try again."
+        };
+    }
+
+    if (dependentCourses.length > 0 && !confirmed) {
+        return {
+            error: `This course is required by the following course(s): ${dependentCourses.join(", ")}. Please confirm first whether you want to delete them or not first.`
         };
     }
 

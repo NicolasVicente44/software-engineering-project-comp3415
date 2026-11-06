@@ -29,3 +29,22 @@ export function checkPrerequisites(
   const missing = required.filter((code) => !completed.has(code));
   return { eligible: missing.length === 0, required, missing };
 }
+
+// used when deleting courses, will show the user what courses the attempted deletec course will depend on
+// only shows direct prereqs
+export function findDependentCourses(
+  targetCode: string,
+  studentCourses: {course_code: string; prerequisites: string[];}[]
+): string[] {
+  const normalizedCode = normalizeCourseCode(targetCode);
+
+  return studentCourses
+    .filter(course => 
+      course.prerequisites.some(
+        prereq => normalizeCourseCode(prereq) === normalizedCode
+      )
+    )
+    .map(course => course.course_code);
+}
+
+
