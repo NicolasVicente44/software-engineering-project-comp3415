@@ -2,11 +2,17 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { checkPrerequisites } from "@/lib/prerequisites/check";
+import { checkPrerequisites, normalizeCourseCode } from "@/lib/prerequisites/check";
 
 export type CourseActionState = {
     error?: string;
 };
+
+const prerequisiteRegex = /^[A-Za-z]{4}-\d{4}(\s*,\s*[A-Za-z]{4}-\d{4})*$/;
+
+function parsePrerequisites(value: string): string[] {
+    return value.split(",").map(code => normalizeCourseCode(code)).filter(code => code !== "");
+}
 
 export async function createCourse(_previousState: CourseActionState, formData: FormData) {
     const supabase = await createClient();
@@ -23,6 +29,7 @@ export async function createCourse(_previousState: CourseActionState, formData: 
     const courseCode = formData.get("course_code");
     const credits = formData.get("credits");
     const status = formData.get("status");
+    const prerequisiteInputs = formData.get("prerequisites");
 
     // validation of form data
     if (typeof courseName !== "string" || courseName.trim() === "" || !/[A-Za-z]/.test(courseName)) {
@@ -35,6 +42,15 @@ export async function createCourse(_previousState: CourseActionState, formData: 
             error: "Course code must be in the format ABCD-#### and is required."
         };
     }
+
+    // follows ABCD-####,EFGH-#### format
+    if (typeof prerequisiteInputs !== "string" || (prerequisiteInputs.trim() !== "" && !prerequisiteRegex.test(prerequisiteInputs.trim()))) {
+        return {
+            error: "Invalid prerequisite input. It must be in COMP-2412, CALC-1311 format if there are multiple prerequisites."
+        };
+    }
+
+    const prerequisites = parsePrerequisites(prerequisiteInputs);
 
     if (typeof credits !== "string" || credits.trim() === "") {
         return {
@@ -83,7 +99,8 @@ export async function createCourse(_previousState: CourseActionState, formData: 
             course_name: courseName.trim(),
             course_code: courseCode.trim(),
             credits: creditsAsNumber,
-            status: status
+            status: status,
+            prerequisites: prerequisites
         }
     )
 
@@ -113,6 +130,7 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
     const courseCode = formData.get("course_code");
     const credits = formData.get("credits");
     const status = formData.get("status");
+    const prerequisiteInputs = formData.get("prerequisites");
 
     // validation of form data
     if (typeof courseId !== "string" || courseId.trim() === "") {
@@ -131,6 +149,14 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
             error: "Course code must be in the format ABCD-#### and is required."
         };
     }
+
+    if (typeof prerequisiteInputs !== "string" || (prerequisiteInputs.trim() !== "" && !prerequisiteRegex.test(prerequisiteInputs.trim()))) {
+        return {
+            error: "Invalid prerequisite input. It must be in COMP-2412, CALC-1311 format if there are multiple prerequisites."
+        };
+    }
+
+    const prerequisites = parsePrerequisites(prerequisiteInputs);
 
     if (typeof credits !== "string" || credits.trim() === "") {
         return {
@@ -166,7 +192,8 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
             course_name: courseName.trim(),
             course_code: courseCode.trim(),
             credits: creditsAsNumber,
-            status: status
+            status: status,
+            prerequisites: prerequisites
         })
         .eq("id", courseId)
         .eq("user_id", user.id)
