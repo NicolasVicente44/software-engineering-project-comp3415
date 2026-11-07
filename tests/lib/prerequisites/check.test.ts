@@ -88,9 +88,8 @@ describe("checkPrerequisites", () => {
       missing: [],
     });
   });
-});
 
-// simulates changing a course to have a prereq that would create a circular cycle
+  // simulates changing a course to have a prereq that would create a circular cycle
   it("US-09 AC2: rejects a circular prerequisite", () => {
     const studentCourses = [
       { course_code: "COMP-1000", prerequisites: ["COMP-2000"] },
@@ -105,3 +104,5 @@ describe("checkPrerequisites", () => {
 
     expect(result).toBe(true);
   });
+
+});
