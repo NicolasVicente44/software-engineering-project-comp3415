@@ -1,0 +1,2 @@
+ALTER TABLE public.student_courses
+ADD COLUMN IF NOT EXISTS prerequisites TEXT[] NOT NULL DEFAULT '{}';

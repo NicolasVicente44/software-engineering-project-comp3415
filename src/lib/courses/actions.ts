@@ -2,11 +2,57 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { checkPrerequisites } from "@/lib/prerequisites/check";
+import { checkPrerequisites, normalizeCourseCode, findDependentCourses, findMissingPrerequisitesInCourseList, looksForCircularPrerequisite} from "@/lib/prerequisites/check";
 
 export type CourseActionState = {
     error?: string;
 };
+
+const prerequisiteRegex = /^[A-Za-z]{4}-\d{4}(\s*,\s*[A-Za-z]{4}-\d{4})*$/;
+
+function parsePrerequisites(value: string): string[] {
+    return value.split(",").map(code => normalizeCourseCode(code)).filter(code => code !== "");
+}
+
+// fetches the students courses with their prereqs to be used in later functions
+async function getStudentCoursesForPrerequisites(userId: string) {
+    const supabase = await createClient();
+
+    return supabase
+        .from("student_courses")
+        .select("course_code, prerequisites")
+        .eq("user_id", userId);
+}
+
+// get the required info for findDependentCourses to be able to search for the courses that an attempted deleted course is needed for
+export async function getAnyDependentCourses(courseId: string): Promise<string[] | null> {
+    const supabase = await createClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if(!user || !courseId.trim()) {
+        return null;
+    }
+
+    const { data: studentCourses, error} = await supabase
+        .from("student_courses")
+        .select("id, course_code, prerequisites")
+        .eq("user_id", user.id);
+
+    if (error) {
+        console.error("Failed to load courses: ", error);
+        return null;
+    }
+
+    const targetCourse = studentCourses?.find(course => course.id === courseId);
+
+    if (!targetCourse) {
+        return null;
+    }
+
+    return findDependentCourses(targetCourse.course_code, studentCourses ?? []);
+
+}
 
 export async function createCourse(_previousState: CourseActionState, formData: FormData) {
     const supabase = await createClient();
@@ -23,6 +69,7 @@ export async function createCourse(_previousState: CourseActionState, formData: 
     const courseCode = formData.get("course_code");
     const credits = formData.get("credits");
     const status = formData.get("status");
+    const prerequisiteInputs = formData.get("prerequisites");
 
     // validation of form data
     if (typeof courseName !== "string" || courseName.trim() === "" || !/[A-Za-z]/.test(courseName)) {
@@ -33,6 +80,51 @@ export async function createCourse(_previousState: CourseActionState, formData: 
     if (typeof courseCode !== "string" || courseCode.trim() === "" || !/^[A-Za-z]{4}-\d{4}$/.test(courseCode.trim())) {
         return {
             error: "Course code must be in the format ABCD-#### and is required."
+        };
+    }
+
+    // follows ABCD-####,EFGH-#### format
+    if (typeof prerequisiteInputs !== "string" || (prerequisiteInputs.trim() !== "" && !prerequisiteRegex.test(prerequisiteInputs.trim()))) {
+        return {
+            error: "Invalid prerequisite input. It must be in COMP-2412, CALC-1311 format if there are multiple prerequisites."
+        };
+    }
+
+    const prerequisites = parsePrerequisites(prerequisiteInputs);
+
+    // make sure that the prereqs do not include the current course itself
+    if (prerequisites.includes(normalizeCourseCode(courseCode))) {
+        return {
+            error: "A course cannot be the prerequisite to itself."
+        }
+    }
+
+    const { data: studentCourses, error: queryError } =
+        await getStudentCoursesForPrerequisites(user.id);
+
+    if (queryError) {
+        console.error("Failed to load courses: ", queryError);
+        return {
+            error: "There was an issue with validating your prerequisites. Please try again."
+        };
+    }
+
+    const missingPrerequisites = findMissingPrerequisitesInCourseList(
+        prerequisites,
+        studentCourses ?? []
+    );
+
+    // any prerequisite found here is not in the course list already, and needs to be added first
+    if (missingPrerequisites.length > 0) {
+        return {
+            error: `Prerequisite courses not found: ${missingPrerequisites.join(", ")}. Please add them first then try again.`
+        };
+    }
+
+    // checks if a cycle was detected
+    if (looksForCircularPrerequisite(courseCode, prerequisites, studentCourses ?? [])) {
+        return {
+            error: "Adding this course with this prerequisite would cause a circular prerequisite."
         };
     }
 
@@ -69,7 +161,7 @@ export async function createCourse(_previousState: CourseActionState, formData: 
             };
         }
 
-        const result = checkPrerequisites(courseCode, studentCourses ?? []);
+        const result = checkPrerequisites(courseCode, studentCourses ?? [], {[normalizeCourseCode(courseCode)]: prerequisites});
         if (!result.eligible) {
             return {
                 error: `Missing prerequisites: ${result.missing.join(", ")}`
@@ -83,7 +175,8 @@ export async function createCourse(_previousState: CourseActionState, formData: 
             course_name: courseName.trim(),
             course_code: courseCode.trim(),
             credits: creditsAsNumber,
-            status: status
+            status: status,
+            prerequisites: prerequisites
         }
     )
 
@@ -113,6 +206,7 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
     const courseCode = formData.get("course_code");
     const credits = formData.get("credits");
     const status = formData.get("status");
+    const prerequisiteInputs = formData.get("prerequisites");
 
     // validation of form data
     if (typeof courseId !== "string" || courseId.trim() === "") {
@@ -129,6 +223,47 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
     if (typeof courseCode !== "string" || courseCode.trim() === "" || !/^[A-Za-z]{4}-\d{4}$/.test(courseCode.trim())) {
         return {
             error: "Course code must be in the format ABCD-#### and is required."
+        };
+    }
+
+    if (typeof prerequisiteInputs !== "string" || (prerequisiteInputs.trim() !== "" && !prerequisiteRegex.test(prerequisiteInputs.trim()))) {
+        return {
+            error: "Invalid prerequisite input. It must be in COMP-2412, CALC-1311 format if there are multiple prerequisites."
+        };
+    }
+
+    const prerequisites = parsePrerequisites(prerequisiteInputs);
+
+    if (prerequisites.includes(normalizeCourseCode(courseCode))) {
+        return {
+            error: "A course cannot be the prerequisite to itself."
+        }
+    }
+
+    const { data: studentCourses, error: queryError } =
+        await getStudentCoursesForPrerequisites(user.id);
+
+    if (queryError) {
+        console.error("Failed to load courses: ", queryError);
+        return {
+            error: "There was an issue with validating your prerequisites. Please try again."
+        };
+    }
+
+    const missingPrerequisites = findMissingPrerequisitesInCourseList(
+        prerequisites,
+        studentCourses ?? []
+    );
+
+    if (missingPrerequisites.length > 0) {
+        return {
+            error: `Prerequisite courses not found: ${missingPrerequisites.join(", ")}. Please add them first then try again.`
+        };
+    }
+
+    if (looksForCircularPrerequisite(courseCode, prerequisites, studentCourses ?? [])) {
+        return {
+            error: "Editing this course with this prerequisite would cause a circular prerequisite."
         };
     }
 
@@ -159,6 +294,30 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
         };
     }
 
+    // only run prereq validation when course is in progress
+    if (status === "in_progress") {
+        const { data: studentCourses, error: queryError } = await supabase
+            .from("student_courses")
+            .select("course_code, status")
+            .eq("user_id", user.id);
+        
+        if(queryError) {
+            console.error("Failed to check prerequistites", queryError);
+            return {
+                error: "Could not check prerequisites. Please try again."
+            };
+        }
+
+        const result = checkPrerequisites(courseCode, studentCourses ?? [], {[normalizeCourseCode(courseCode)]: prerequisites});
+        if (!result.eligible) {
+            return {
+                error: `Missing prerequisites: ${result.missing.join(", ")}`
+            };
+        }
+    }
+
+    // ADD A CHECK HERE TO PREVENT COMPLETED COURSES BEING SET TO OTHER STATUSES IF A DIFFERENT COURSE DEPENDS ON IT
+
     // Update only the course belonging to the logged-in user
     const { data, error } = await supabase
         .from("student_courses")
@@ -166,7 +325,8 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
             course_name: courseName.trim(),
             course_code: courseCode.trim(),
             credits: creditsAsNumber,
-            status: status
+            status: status,
+            prerequisites: prerequisites
         })
         .eq("id", courseId)
         .eq("user_id", user.id)
@@ -190,7 +350,7 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
     redirect("/courses");
 }
 
-export async function deleteCourse(courseId: string): Promise<CourseActionState>  {
+export async function deleteCourse(courseId: string, confirmed: boolean = false): Promise<CourseActionState>  {
     const supabase = await createClient();
     const {data: { user }} = await supabase.auth.getUser();
 
@@ -203,6 +363,20 @@ export async function deleteCourse(courseId: string): Promise<CourseActionState>
     if (!courseId || courseId.trim() === "") {
         return {
             error: "A course ID is required."
+        };
+    }
+
+    const dependentCourses = await getAnyDependentCourses(courseId);
+
+    if (dependentCourses === null) {
+        return {
+            error: "There was an issue with verifying your dependencies. Please try again."
+        };
+    }
+
+    if (dependentCourses.length > 0 && !confirmed) {
+        return {
+            error: `This course is required by the following course(s): ${dependentCourses.join(", ")}. Please confirm first whether you want to delete them or not first.`
         };
     }
 
