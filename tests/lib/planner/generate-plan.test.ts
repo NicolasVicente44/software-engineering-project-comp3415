@@ -148,6 +148,25 @@ describe("generatePlan", () => {
     expect(termOf("COMP-3415")).toBeGreaterThan(termOf("COMP-2412"));
     expect(termOf("COMP-3415")).toBeGreaterThan(termOf("COMP-2477"));
   });
+
+  it("US-09 AC1: showcases a newly added prereq in the course plan", () => {
+      const newCourse = {
+          course_code: "COMP-3145",
+          prerequisites: ["COMP-1000"]
+      };
+      const prereqMap = {
+          [newCourse.course_code]: newCourse.prerequisites
+      };
+      const result = generatePlan(
+          [],
+          ["COMP-3145"],
+          prereqMap
+      );
+      expect(result.terms.map(term => term.courses)).toEqual([
+          ["COMP-1000"],
+          ["COMP-3145"]
+      ]);
+  });
 });
 
 // independent courses (no prerequisites) worth 1.0 credits each

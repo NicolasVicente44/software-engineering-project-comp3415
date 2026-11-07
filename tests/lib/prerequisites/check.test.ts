@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   checkPrerequisites,
   normalizeCourseCode,
+  looksForCircularPrerequisite
 } from "@/lib/prerequisites/check";
 
 const MAP = { "COMP-3000": ["COMP-1000", "COMP-2000"] };
@@ -88,3 +89,19 @@ describe("checkPrerequisites", () => {
     });
   });
 });
+
+// simulates changing a course to have a prereq that would create a circular cycle
+  it("US-09 AC2: rejects a circular prerequisite", () => {
+    const studentCourses = [
+      { course_code: "COMP-1000", prerequisites: ["COMP-2000"] },
+      { course_code: "COMP-2000", prerequisites: [] },
+    ];
+
+    const result = looksForCircularPrerequisite(
+      "COMP-2000",
+      ["COMP-1000"],
+      studentCourses
+    );
+
+    expect(result).toBe(true);
+  });
