@@ -55,7 +55,7 @@ describe("CoursesView", () => {
             from,
         });
 
-        const page = await CoursesView();
+        const page = await CoursesView({ searchParams: Promise.resolve({}) });
         render(page);
 
         expect(from).toHaveBeenCalledWith("student_courses");
@@ -96,11 +96,67 @@ describe("CoursesView", () => {
             from,
         });
 
-        const page = await CoursesView();
+        const page = await CoursesView({ searchParams: Promise.resolve({}) });
         render(page);
 
         expect(
             screen.getByText("Unable to load your courses. Please try again.")
         ).toBeInTheDocument();
+    });
+
+    describe("added course message", () => {
+        // logged in user with one course and no db error
+        function mockLoadedCourses() {
+            createClient.mockResolvedValue({
+                auth: {
+                    getUser: vi.fn().mockResolvedValue({
+                        data: {
+                            user: {
+                                id: "user-1234"
+                            }
+                        }
+                    }),
+                },
+                from: vi.fn().mockReturnValue({
+                    select: vi.fn().mockReturnValue({
+                        eq: vi.fn().mockResolvedValue({
+                            data: [course],
+                            error: null
+                        }),
+                    }),
+                }),
+            });
+        }
+
+        it("shows the success message when a course was added", async () => {
+            mockLoadedCourses();
+
+            const page = await CoursesView({ searchParams: Promise.resolve({ added: "COMP-3415" }) });
+            render(page);
+
+            expect(
+                screen.getByText("COMP-3415 was added to your courses.")
+            ).toBeInTheDocument();
+        });
+
+        it("shows no message when added is missing", async () => {
+            mockLoadedCourses();
+
+            const page = await CoursesView({ searchParams: Promise.resolve({}) });
+            render(page);
+
+            expect(screen.queryByText(/was added to your courses/)).not.toBeInTheDocument();
+            expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        });
+
+        it("shows no message when added is not a valid course code", async () => {
+            mockLoadedCourses();
+
+            const page = await CoursesView({ searchParams: Promise.resolve({ added: "hello" }) });
+            render(page);
+
+            expect(screen.queryByText(/was added to your courses/)).not.toBeInTheDocument();
+            expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        });
     });
 });
