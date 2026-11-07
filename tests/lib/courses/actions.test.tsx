@@ -87,7 +87,7 @@ describe("createCourse", () => {
         });
 
         expect(from).toHaveBeenCalledWith("student_courses");
-        expect(redirect).toHaveBeenCalledWith("/courses");
+        expect(redirect).toHaveBeenCalledWith("/courses?added=COMP-4312");
     });
 
     it("error is returned when course name is empty", async () => {
@@ -420,7 +420,7 @@ describe("createCourse", () => {
         });
 
         expect(from).toHaveBeenCalledWith("student_courses");
-        expect(redirect).toHaveBeenCalledWith("/courses");
+        expect(redirect).toHaveBeenCalledWith("/courses?added=COMP-3415");
     });
 
     it("returns an error when the prerequisite check fails", async () => {
