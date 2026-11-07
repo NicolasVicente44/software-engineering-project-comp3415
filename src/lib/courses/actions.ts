@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { checkPrerequisites, normalizeCourseCode, findDependentCourses, findMissingPrerequisitesInCourseList} from "@/lib/prerequisites/check";
+import { checkPrerequisites, normalizeCourseCode, findDependentCourses, findMissingPrerequisitesInCourseList, looksForCircularPrerequisite} from "@/lib/prerequisites/check";
 
 export type CourseActionState = {
     error?: string;
@@ -118,6 +118,13 @@ export async function createCourse(_previousState: CourseActionState, formData: 
     if (missingPrerequisites.length > 0) {
         return {
             error: `Prerequisite courses not found: ${missingPrerequisites.join(", ")}. Please add them first then try again.`
+        };
+    }
+
+    // checks if a cycle was detected
+    if (looksForCircularPrerequisite(courseCode, prerequisites, studentCourses ?? [])) {
+        return {
+            error: "Adding this course with this prerequisite would cause a circular prerequisite."
         };
     }
 
@@ -251,6 +258,12 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
     if (missingPrerequisites.length > 0) {
         return {
             error: `Prerequisite courses not found: ${missingPrerequisites.join(", ")}. Please add them first then try again.`
+        };
+    }
+
+    if (looksForCircularPrerequisite(courseCode, prerequisites, studentCourses ?? [])) {
+        return {
+            error: "Editing this course with this prerequisite would cause a circular prerequisite."
         };
     }
 
