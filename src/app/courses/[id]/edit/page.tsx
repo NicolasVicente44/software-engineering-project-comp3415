@@ -26,7 +26,7 @@ export default async function EditCourse({ params }: EditCourseProps) {
 
     const { data: course, error } = await supabase
         .from("student_courses")
-        .select("id, course_name, course_code, credits, status")
+        .select("id, course_name, course_code, credits, status, prerequisites")
         .eq("id", id)
         .eq("user_id", user.id)
         .single();

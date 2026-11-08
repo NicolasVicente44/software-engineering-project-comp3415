@@ -22,6 +22,7 @@ type Course = {
     course_code: string;
     credits: number;
     status: "completed" | "in_progress" | "dropped" | "failed";
+    prerequisites?: string[];
 };
 
 type CourseFormProps = {
@@ -54,6 +55,13 @@ export function CourseForm({ action, course  }: CourseFormProps) {
                 <Label htmlFor="course_code">Course Code</Label>
                 <Input id="course_code" name="course_code" type="text" required placeholder="COMP-3415" defaultValue={course?.course_code ?? ""}/>
             </div>
+
+            <div className="flex flex-col gap-2">
+                <Label htmlFor="prerequisites">Prerequisites</Label>
+                <Input id="prerequisites" name="prerequisites" type="text" placeholder="COMP-2415, COMP-1434" defaultValue={course?.prerequisites?.join(", ") ?? ""}/>
+                <p className="text-xs text-muted-foreground">Please separate course codes with commas. Leave blank if the current course has no prerequisites.</p>
+            </div>
+
             <div className="flex flex-col gap-2">
                 <Label htmlFor="credits">Credits</Label>
                 <Input id="credits" name="credits" type="number" required placeholder="0.5" min="0" step="0.01" defaultValue={course?.credits ?? ""}/>
