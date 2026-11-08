@@ -11,7 +11,14 @@ import {
 
 import { createClient } from "@/lib/supabase/server";
 
-export default async function CoursesView() {
+export default async function CoursesView({
+    searchParams,
+}: {
+    searchParams: Promise<{ added?: string }>;
+}) {
+    const { added } = await searchParams;
+    // only trust a valid course code from the url
+    const addedCourseCode = added && /^[A-Za-z]{4}-\d{4}$/.test(added) ? added : null;
     const supabase = await createClient();
 
     const {data: {user}, } = await supabase.auth.getUser(); // assigning to logged in user
@@ -37,6 +44,14 @@ export default async function CoursesView() {
                 <Link href="/courses/add" className={buttonVariants({variant: "default", className: "mt-4 rounded-xl"})}>
                     Add Course
                 </Link>
+
+                {addedCourseCode && ( // success message after adding a course
+                    <Alert className="mt-4">
+                        <AlertDescription>
+                            {addedCourseCode} was added to your courses.
+                        </AlertDescription>
+                    </Alert>
+                )}
 
                 {error && ( // error alert message
                     <Alert variant="destructive" className="mt-4">

@@ -187,7 +187,7 @@ export async function createCourse(_previousState: CourseActionState, formData: 
             error: "Unable to add course. Please try again."
         };
     }
-    redirect("/courses");   
+    redirect(`/courses?added=${encodeURIComponent(normalizeCourseCode(courseCode))}`);
 }
 
 export async function updateCourse(_previousState: CourseActionState,formData: FormData): Promise<CourseActionState> {
