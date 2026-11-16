@@ -53,6 +53,22 @@ export function parseNewPassword(
   return { ok: true, value: { password } };
 }
 
+export function parseChangePassword(
+  formData: FormData,
+): Result<{ currentPassword: string; password: string }> {
+  const currentPassword = String(formData.get("currentPassword") ?? "");
+  if (!currentPassword) {
+    return { ok: false, error: "Enter your current password." };
+  }
+
+  const password = parseNewPassword(formData);
+  if (!password.ok) return password;
+  return {
+    ok: true,
+    value: { currentPassword, password: password.value.password },
+  };
+}
+
 export function parseSignUp(formData: FormData): Result<Credentials> {
   const email = readEmail(formData);
   const emailError = validateEmail(email);
