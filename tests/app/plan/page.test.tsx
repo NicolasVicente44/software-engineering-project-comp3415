@@ -15,13 +15,6 @@ vi.mock("next/navigation", () => ({
     redirect,
 }));
 
-// the credit limit form is a client component tested on its own
-vi.mock("@/components/plan/credit-limit-form", () => ({
-    CreditLimitForm: ({ creditLimit }: { creditLimit: number }) => (
-        <p>Credit limit form: {creditLimit}</p>
-    ),
-}));
-
 const mockSupabase = (
     result: { data: unknown; error: unknown },
     user: { id: string } | null = { id: "user-1234" },
@@ -177,7 +170,8 @@ describe("PlanView", () => {
             render(await PlanView(generated));
 
             expect(settingsEq).toHaveBeenCalledWith("user_id", "user-1234");
-            expect(screen.getByText("Credit limit form: 2.5")).toBeInTheDocument();
+            expect(screen.getByText(/Credit limit:/)).toHaveTextContent("Credit limit: 2.5 per term");
+            expect(screen.getByRole("link", { name: "Change in Profile" })).toHaveAttribute("href", "/profile");
             // 3 x 1.0 credits do not fit under 2.5, so the third waits a term
             expect(screen.getByText("Term 2")).toBeInTheDocument();
             expect(screen.getByText(/2 courses · 2 of 2\.5 credits/)).toBeInTheDocument();
@@ -195,7 +189,7 @@ describe("PlanView", () => {
 
             render(await PlanView(generated));
 
-            expect(screen.getByText("Credit limit form: 1")).toBeInTheDocument();
+            expect(screen.getByText(/Credit limit:/)).toHaveTextContent("Credit limit: 1 per term");
             expect(screen.getByText(/2 courses · 1 of 1 credits/)).toBeInTheDocument();
             expect(screen.getByText(/1 course · 0\.5 of 1 credits/)).toBeInTheDocument();
         });
@@ -248,7 +242,7 @@ describe("PlanView", () => {
                 screen.getByText("Unable to load your credit limit. Please try again.")
             ).toBeInTheDocument();
             expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
-            expect(screen.queryByText(/Credit limit form/)).not.toBeInTheDocument();
+            expect(screen.queryByText(/Credit limit:/)).not.toBeInTheDocument();
         });
     });
 });
