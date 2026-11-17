@@ -20,7 +20,7 @@ async function getStudentCoursesForPrerequisites(userId: string) {
 
     return supabase
         .from("student_courses")
-        .select("course_code, prerequisites")
+        .select("id, course_code, prerequisites")
         .eq("user_id", userId);
 }
 
@@ -250,9 +250,70 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
         };
     }
 
+    // gets the original course by id to use to find the course code that is changing
+    const originalCourse = studentCourses?.find( 
+        course => course.id === courseId
+    );
+
+    if (!originalCourse) {
+        return {
+            error: "Course not found."
+        };
+    }
+
+    const oldCourseCode = normalizeCourseCode(originalCourse.course_code);
+    const newCourseCode = normalizeCourseCode(courseCode);
+
+    // checks if any of the current studentCourses are equal to the newCourseCode
+    const preventDuplicateCourse = (studentCourses ?? []).some(
+        course => 
+            course.id !== courseId &&
+            normalizeCourseCode(course.course_code) === newCourseCode
+    );
+
+    if (preventDuplicateCourse) {
+        return {
+            error: `Please try a different course code, another course already uses ${newCourseCode}`
+        };
+    }
+
+    const dependentCourses = (studentCourses ?? []) 
+    // grabs any course that has the oldCourseCode in their prereq list
+        .filter(course =>
+            course.id !== courseId && 
+            course.prerequisites.some((prereq: string) => normalizeCourseCode(prereq) === oldCourseCode)
+        )
+        // puts any course that had the originalCourse as a prereq in the list with it's id and updated prereq list
+        .map(course => ({
+            id: course.id,
+            prerequisites: course.prerequisites.map((prereq: string) =>
+                normalizeCourseCode(prereq) === oldCourseCode ? newCourseCode : prereq
+            )
+        }));
+
+    // will allow the DFS logic to search through the updated courses
+    const newStudentCourses = (studentCourses ?? []).map(course => {
+            // currently edited course
+            if (course.id === courseId) {
+                return {
+                    course_code: newCourseCode,
+                    prerequisites
+                };
+            }
+
+            // looks if the course being checked is already in the dependent list
+            const dependent = dependentCourses.find(dependent => dependent.id === course.id);
+            
+            return {
+                course_code: normalizeCourseCode(course.course_code),
+                // uses dependent prereqs if already in list, or normal prereqs if not
+                prerequisites: dependent ? dependent.prerequisites : course.prerequisites
+            };
+    });
+
     const missingPrerequisites = findMissingPrerequisitesInCourseList(
         prerequisites,
-        studentCourses ?? []
+        newStudentCourses
     );
 
     if (missingPrerequisites.length > 0) {
@@ -261,7 +322,7 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
         };
     }
 
-    if (looksForCircularPrerequisite(courseCode, prerequisites, studentCourses ?? [])) {
+    if (looksForCircularPrerequisite(newCourseCode, prerequisites, newStudentCourses)) {
         return {
             error: "Editing this course with this prerequisite would cause a circular prerequisite."
         };
@@ -345,6 +406,25 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
         return {
             error: "Course not found or you do not have permission to update it."
         };
+    }
+
+    // update the dependents in supabase if the course code was changed
+    if (oldCourseCode !== newCourseCode) {
+        for (const dependent of dependentCourses) {
+            const { data: updatedDependent, error: dependentUpdateError } = await supabase
+                .from("student_courses")
+                .update({prerequisites: dependent.prerequisites}) // save new prereq list
+                .eq("id", dependent.id)
+                .eq("user_id", user.id)
+                .select("id")
+                .maybeSingle();
+
+            if (dependentUpdateError || !updatedDependent) {
+                return {
+                    error: "Course was renamed, but some dependent prerequisites could not be updated."
+                };
+            }
+        }
     }
 
     redirect("/courses");

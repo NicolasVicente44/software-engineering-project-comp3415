@@ -572,6 +572,8 @@ describe("updateCourse", () => {
         return formData;
     };
 
+
+
     const mockLoggedInUser = () => {
         const getUser = vi.fn().mockResolvedValue({
             data: {
@@ -641,11 +643,10 @@ describe("updateCourse", () => {
         const result = await updateCourse({}, validFormData());
 
         expect(result).toEqual({
-            error: "Course not found or you do not have permission to update it."
+            error: "Course not found."
         });
 
-        expect(firstEq).toHaveBeenCalledWith("id", "course-123");
-        expect(secondEq).toHaveBeenCalledWith("user_id", "user-1234");
+        expect(update).not.toHaveBeenCalled();
     });
 
     it("course is updated when valid course ID exists and information is valid", async () => {
@@ -662,7 +663,13 @@ describe("updateCourse", () => {
         const update = vi.fn().mockReturnValue({ eq: firstEq });
         const prerequisiteEq = vi.fn()
             .mockResolvedValueOnce({
-                data: [],
+                data: [
+                    {
+                        id: "course-123",
+                        course_code: "COMP-3415",
+                        prerequisites: []
+                    }
+                ],
                 error: null
             })
             .mockResolvedValueOnce({
@@ -776,7 +783,13 @@ describe("updateCourse", () => {
         mockLoggedInUser();
 
         const eq = vi.fn().mockResolvedValue({
-            data: [],
+            data: [
+                    {
+                        id: "course-123",
+                        course_code: "COMP-3415",
+                        prerequisites: []
+                    }
+                ],
             error: null
         });
 
@@ -806,7 +819,13 @@ describe("updateCourse", () => {
         mockLoggedInUser();
 
         const eq = vi.fn().mockResolvedValue({
-            data: [],
+            data: [
+                    {
+                        id: "course-123",
+                        course_code: "COMP-3415",
+                        prerequisites: []
+                    }
+                ],
             error: null
         });
 
@@ -836,7 +855,13 @@ describe("updateCourse", () => {
         mockLoggedInUser();
 
         const eq = vi.fn().mockResolvedValue({
-            data: [],
+            data: [
+                    {
+                        id: "course-123",
+                        course_code: "COMP-3415",
+                        prerequisites: []
+                    }
+                ],
             error: null
         });
 
@@ -866,7 +891,13 @@ describe("updateCourse", () => {
         mockLoggedInUser();
 
         const eq = vi.fn().mockResolvedValue({
-            data: [],
+            data: [
+                    {
+                        id: "course-123",
+                        course_code: "COMP-3415",
+                        prerequisites: []
+                    }
+                ],
             error: null
         });
 
@@ -905,7 +936,13 @@ describe("updateCourse", () => {
         const firstEq = vi.fn().mockReturnValue({ eq: secondEq });
         const update = vi.fn().mockReturnValue({ eq: firstEq });
         const prereqEq = vi.fn().mockResolvedValue({
-            data: [],
+            data: [
+                    {
+                        id: "course-123",
+                        course_code: "COMP-3415",
+                        prerequisites: []
+                    }
+                ],
             error: null
         });
 
@@ -942,10 +979,12 @@ describe("updateCourse", () => {
         const prereqEq = vi.fn().mockResolvedValue({
             data: [
                 {
+                    id: "course-1",
                     course_code: "COMP-1000",
                     prerequisites: ["COMP-2000"]
                 },
                 {
+                    id: "course-2",
                     course_code: "COMP-2000",
                     prerequisites: []
                 }
@@ -994,6 +1033,7 @@ describe("updateCourse", () => {
         const prereqEq = vi.fn().mockResolvedValue({
             data: [
                 {
+                    id: "course-123",
                     course_code: "COMP-3145",
                     prerequisites: []
                 }
@@ -1032,6 +1072,162 @@ describe("updateCourse", () => {
         });
 
         expect(update).not.toHaveBeenCalled();
+    });
+
+    it("updates dependent prerequisites when a course code is renamed", async () => {
+        mockLoggedInUser();
+
+        const maybeSingle = vi.fn()
+            .mockResolvedValueOnce({
+                data: { id: "course-1" },
+                error: null
+            })
+            .mockResolvedValueOnce({
+                data: { id: "course-2" },
+                error: null
+            });
+
+        const select = vi.fn().mockReturnValue({ maybeSingle });
+        const secondEq = vi.fn().mockReturnValue({ select });
+        const firstEq = vi.fn().mockReturnValue({ eq: secondEq });
+        const update = vi.fn().mockReturnValue({ eq: firstEq });
+
+        const prerequisiteEq = vi.fn().mockResolvedValue({
+            data: [
+                {
+                    id: "course-1",
+                    course_code: "COMP-1000",
+                    prerequisites: []
+                },
+                {
+                    id: "course-2",
+                    course_code: "COMP-2000",
+                    prerequisites: ["COMP-1000"]
+                }
+            ],
+            error: null
+        });
+
+        const prerequisiteSelect = vi.fn().mockReturnValue({
+            eq: prerequisiteEq
+        });
+
+        const from = vi.fn().mockReturnValue({
+            select: prerequisiteSelect,
+            update
+        });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({
+                    data: { user: { id: "user-1234" } }
+                })
+            },
+            from
+        });
+
+        const formData = validFormData();
+        formData.set("id", "course-1");
+        formData.set("course_code", "COMP-1500");
+        formData.set("status", "completed");
+
+        const result = await updateCourse({}, formData);
+
+        expect(update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                course_code: "COMP-1500"
+            })
+        );
+
+        expect(update).toHaveBeenCalledWith({
+            prerequisites: ["COMP-1500"]
+        });
+
+        expect(update).toHaveBeenCalledTimes(2);
+
+        expect(firstEq).toHaveBeenCalledWith("id", "course-2");
+
+        expect(redirect).toHaveBeenCalledWith("/courses");
+        expect(result).toBeUndefined();
+    });
+
+    it("returns an error when updating dependent prerequisites fails", async () => {
+        mockLoggedInUser();
+
+        const maybeSingle = vi.fn()
+            .mockResolvedValueOnce({
+                data: { id: "course-1" },
+                error: null
+            })
+            .mockResolvedValueOnce({
+                data: null,
+                error: { message: "Database update failed" }
+            });
+
+        const select = vi.fn().mockReturnValue({ maybeSingle });
+        const secondEq = vi.fn().mockReturnValue({ select });
+        const firstEq = vi.fn().mockReturnValue({ eq: secondEq });
+        const update = vi.fn().mockReturnValue({ eq: firstEq });
+
+        const prerequisiteEq = vi.fn().mockResolvedValue({
+            data: [
+                {
+                    id: "course-1",
+                    course_code: "COMP-1000",
+                    prerequisites: []
+                },
+                {
+                    id: "course-2",
+                    course_code: "COMP-2000",
+                    prerequisites: ["COMP-1000"]
+                }
+            ],
+            error: null
+        });
+
+        const prerequisiteSelect = vi.fn().mockReturnValue({
+            eq: prerequisiteEq
+        });
+
+        const from = vi.fn().mockReturnValue({
+            select: prerequisiteSelect,
+            update
+        });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({
+                    data: { user: { id: "user-1234" } }
+                })
+            },
+            from
+        });
+
+        const formData = validFormData();
+        formData.set("id", "course-1");
+        formData.set("course_code", "COMP-1500");
+        formData.set("status", "completed");
+
+        const result = await updateCourse({}, formData);
+
+        // the course update would still succeed
+        expect(update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                course_code: "COMP-1500"
+            })
+        );
+
+        expect(update).toHaveBeenCalledWith({
+            prerequisites: ["COMP-1500"]
+        });
+
+        expect(update).toHaveBeenCalledTimes(2);
+
+        expect(result).toEqual({ // error when actually updating dependents
+            error: "Course was renamed, but some dependent prereqs could not be updated."
+        });
+
+        expect(redirect).not.toHaveBeenCalled();
     });
 
 });
