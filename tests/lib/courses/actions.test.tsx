@@ -1651,7 +1651,7 @@ describe("deleteCourse", () => {
         const result = await deleteCourse("course-1");
 
         expect(result).toEqual({
-            error: "This course is required by the following course(s): COMP-2000, COMP-3000. Please confirm first whether you want to delete them or not first."
+            error: "This course is required by the following course(s): COMP-2000, COMP-3000. Deleting it will also remove it from their prerequisite lists. Please confirm."
         });
 
         expect(deleteQuery).not.toHaveBeenCalled();
@@ -1696,8 +1696,29 @@ describe("deleteCourse", () => {
             eq: firstEq
         });
 
+        const updateMaybeSingle = vi.fn().mockResolvedValue({
+            data: { id: "course-2" },
+            error: null
+        });
+
+        const updateSelect = vi.fn().mockReturnValue({
+            maybeSingle: updateMaybeSingle
+        });
+
+        const updateSecondEq = vi.fn().mockReturnValue({
+            select: updateSelect
+        });
+
+        const updateFirstEq = vi.fn().mockReturnValue({
+            eq: updateSecondEq
+        });
+
+        const updateQuery = vi.fn().mockReturnValue({
+            eq: updateFirstEq
+        });
         const from = vi.fn().mockReturnValue({
             select: prereqSelect,
+            update: updateQuery,
             delete: deleteQuery
         });
 
@@ -1707,6 +1728,13 @@ describe("deleteCourse", () => {
         });
 
         await deleteCourse("course-1", true);
+
+        expect(updateQuery).toHaveBeenCalledWith({
+            prerequisites: []
+        });
+
+        expect(updateFirstEq).toHaveBeenCalledWith("id", "course-2");
+        expect(updateSecondEq).toHaveBeenCalledWith("user_id", "user-1234");
 
         expect(deleteQuery).toHaveBeenCalled();
         expect(firstEq).toHaveBeenCalledWith("id", "course-1");
@@ -1760,4 +1788,78 @@ describe("deleteCourse", () => {
 
         expect(deleteQuery).not.toHaveBeenCalled();
     });
+
+    it("US-09 AC4: prevents deletion when updating dependent prerequisites fails", async () => {
+        const getUser = vi.fn().mockResolvedValue({
+            data: { user: { id: "user-1234" } }
+        });
+
+        const prereqEq = vi.fn().mockResolvedValue({
+            data: [
+                {
+                    id: "course-1",
+                    course_code: "COMP-1000",
+                    prerequisites: []
+                },
+                {
+                    id: "course-2",
+                    course_code: "COMP-2000",
+                    prerequisites: ["COMP-1000"]
+                }
+            ],
+            error: null
+        });
+
+        const prereqSelect = vi.fn().mockReturnValue({
+            eq: prereqEq
+        });
+        
+        const updateMaybeSingle = vi.fn().mockResolvedValue({
+            data: null,
+            error: { message: "Database update failed" }
+        });
+
+        const updateSelect = vi.fn().mockReturnValue({
+            maybeSingle: updateMaybeSingle
+        });
+
+        const updateSecondEq = vi.fn().mockReturnValue({
+            select: updateSelect
+        });
+
+        const updateFirstEq = vi.fn().mockReturnValue({
+            eq: updateSecondEq
+        });
+
+        const updateQuery = vi.fn().mockReturnValue({
+            eq: updateFirstEq
+        });
+
+        const deleteQuery = vi.fn();
+
+        const from = vi.fn().mockReturnValue({
+            select: prereqSelect,
+            update: updateQuery,
+            delete: deleteQuery
+        });
+
+        createClient.mockResolvedValue({
+            auth: { getUser },
+            from
+        });
+
+        const result = await deleteCourse("course-1", true);
+
+        expect(updateQuery).toHaveBeenCalledWith({
+            prerequisites: []
+        });
+
+        expect(result).toEqual({
+            error: "Unable to update dependent prerequisites. Course was not deleted."
+        });
+
+        expect(deleteQuery).not.toHaveBeenCalled();
+        expect(redirect).not.toHaveBeenCalled();
+    });
+
 });
