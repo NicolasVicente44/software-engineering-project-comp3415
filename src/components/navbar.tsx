@@ -13,6 +13,7 @@ export function Navbar() {
 
           <Link href="/courses" className="text-xs font-medium hover:underline">View Courses</Link>
           <Link href="/plan" className="text-xs font-medium hover:underline">My Plan</Link>
+          <Link href="/calendar" className="text-xs font-medium hover:underline">Calendar</Link>
           <Link href="/profile" className="text-xs font-medium hover:underline">Profile</Link>
         </div>
           <form action={signOut}>
