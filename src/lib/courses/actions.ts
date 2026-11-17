@@ -20,7 +20,7 @@ async function getStudentCoursesForPrerequisites(userId: string) {
 
     return supabase
         .from("student_courses")
-        .select("id, course_code, prerequisites")
+        .select("id, course_code, prerequisites, status")
         .eq("user_id", userId);
 }
 
@@ -377,7 +377,24 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
         }
     }
 
-    // ADD A CHECK HERE TO PREVENT COMPLETED COURSES BEING SET TO OTHER STATUSES IF A DIFFERENT COURSE DEPENDS ON IT
+    // checks the original status with new status
+    // new status can still be inprogress because the planner will just generate the plan with the prerequisites in earlier terms instead
+    if(originalCourse.status === "completed" && (status === "failed" || status === "dropped")) {
+        const changedCourses = (studentCourses ?? []).filter(course =>
+            course.id !== courseId &&
+            (course.status === "in_progress" || course.status === "completed") && // if the course is in progress or completed, and a prereq is now failed or dropped it will add it to the list
+            course.prerequisites.some(
+                (prereq: string) => normalizeCourseCode(prereq) === oldCourseCode
+            )
+        );
+
+        // if there is at least one dependent course
+        if(changedCourses.length > 0) {
+            return {
+                error: `You cannot change the status of ${oldCourseCode} as it is required by the following course(s): ${changedCourses.map(course => course.course_code).join(", ")}`
+            };
+        }
+    }
 
     // Update only the course belonging to the logged-in user
     const { data, error } = await supabase

@@ -1224,12 +1224,145 @@ describe("updateCourse", () => {
         expect(update).toHaveBeenCalledTimes(2);
 
         expect(result).toEqual({ // error when actually updating dependents
-            error: "Course was renamed, but some dependent prereqs could not be updated."
+            error: "Course was renamed, but some dependent prerequisites could not be updated."
         });
 
         expect(redirect).not.toHaveBeenCalled();
     });
 
+    it("prevents changing a completed prerequisite to failed when another course depends on it", async () => {
+        mockLoggedInUser();
+
+        const prerequisiteEq = vi.fn().mockResolvedValue({
+            data: [
+                {
+                    id: "course-1",
+                    course_code: "COMP-1000",
+                    status: "completed",
+                    prerequisites: []
+                },
+                {
+                    id: "course-2",
+                    course_code: "COMP-2000",
+                    status: "in_progress",
+                    prerequisites: ["COMP-1000"]
+                }
+            ],
+            error: null
+        });
+
+        const prerequisiteSelect = vi.fn().mockReturnValue({
+            eq: prerequisiteEq
+        });
+
+        const update = vi.fn();
+
+        const from = vi.fn().mockReturnValue({
+            select: prerequisiteSelect,
+            update
+        });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({
+                    data: { user: { id: "user-1234" } }
+                })
+            },
+            from
+        });
+
+        const formData = validFormData();
+        formData.set("id", "course-1");
+        formData.set("course_code", "COMP-1000");
+        formData.set("status", "failed");
+
+        const result = await updateCourse({}, formData);
+
+        expect(result).toEqual({
+            error: "You cannot change the status of COMP-1000 as it is required by the following course(s): COMP-2000"
+        });
+
+        expect(update).not.toHaveBeenCalled();
+        expect(redirect).not.toHaveBeenCalled();
+    });
+
+    it("allows changing a completed prerequisite to in_progress when another course depends on it", async () => {
+        mockLoggedInUser();
+
+        const maybeSingle = vi.fn().mockResolvedValue({
+            data: { id: "course-1" },
+            error: null
+        });
+
+        const select = vi.fn().mockReturnValue({ maybeSingle });
+        const secondEq = vi.fn().mockReturnValue({ select });
+        const firstEq = vi.fn().mockReturnValue({ eq: secondEq });
+        const update = vi.fn().mockReturnValue({ eq: firstEq });
+
+        const prerequisiteEq = vi.fn()
+            .mockResolvedValueOnce({
+                data: [
+                    {
+                        id: "course-1",
+                        course_code: "COMP-1000",
+                        status: "completed",
+                        prerequisites: []
+                    },
+                    {
+                        id: "course-2",
+                        course_code: "COMP-2000",
+                        status: "in_progress",
+                        prerequisites: ["COMP-1000"]
+                    }
+                ],
+                error: null
+            })
+            .mockResolvedValueOnce({
+                data: [
+                    {
+                        course_code: "COMP-2000",
+                        status: "in_progress"
+                    }
+                ],
+                error: null
+            });
+
+        const prerequisiteSelect = vi.fn().mockReturnValue({
+            eq: prerequisiteEq
+        });
+
+        const from = vi.fn().mockReturnValue({
+            select: prerequisiteSelect,
+            update
+        });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({
+                    data: { user: { id: "user-1234" } }
+                })
+            },
+            from
+        });
+
+        const formData = validFormData();
+        formData.set("id", "course-1");
+        formData.set("course_code", "COMP-1000");
+        formData.set("status", "in_progress");
+
+        const result = await updateCourse({}, formData);
+
+        expect(update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                status: "in_progress",
+                course_code: "COMP-1000"
+            })
+        );
+
+        expect(update).toHaveBeenCalledTimes(1);
+        expect(redirect).toHaveBeenCalledWith("/courses");
+        expect(result).toBeUndefined();
+    });
 });
 
 describe("deleteCourse", () => {
