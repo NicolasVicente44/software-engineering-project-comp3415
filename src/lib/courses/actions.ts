@@ -25,7 +25,7 @@ async function getStudentCoursesForPrerequisites(userId: string) {
 }
 
 // get the required info for findDependentCourses to be able to search for the courses that an attempted deleted course is needed for
-export async function getAnyDependentCourses(courseId: string): Promise<string[] | null> {
+export async function getAnyDependentCourses(courseId: string): Promise<string[] | null | "not_found"> {
     const supabase = await createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -47,7 +47,7 @@ export async function getAnyDependentCourses(courseId: string): Promise<string[]
     const targetCourse = studentCourses?.find(course => course.id === courseId);
 
     if (!targetCourse) {
-        return null;
+        return "not_found";
     }
 
     return findDependentCourses(targetCourse.course_code, studentCourses ?? []);
@@ -367,6 +367,12 @@ export async function deleteCourse(courseId: string, confirmed: boolean = false)
     }
 
     const dependentCourses = await getAnyDependentCourses(courseId);
+
+    if (dependentCourses === "not_found") {
+        return {
+            error: "Course not found."
+        };
+    }
 
     if (dependentCourses === null) {
         return {

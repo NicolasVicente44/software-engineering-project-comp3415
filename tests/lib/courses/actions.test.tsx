@@ -1384,4 +1384,51 @@ describe("deleteCourse", () => {
         expect(secondEq).toHaveBeenCalledWith("user_id", "user-1234");
         expect(redirect).toHaveBeenCalledWith("/courses");
     });
+
+    it("returns Course not found when deleting a nonexistent course", async() => {
+        const getUser = vi.fn().mockResolvedValue({
+            data: {
+                user: {
+                    id: "user-1234"
+                }
+            }
+        });
+
+        const prereqEq = vi.fn().mockResolvedValue({
+            data: [
+                {
+                    id: "course-1",
+                    course_code: "COMP-1000",
+                    prerequisites: []
+                }
+            ],
+            error: null
+        });
+
+        const prereqSelect = vi.fn().mockReturnValue({
+            eq: prereqEq
+        });
+
+        const deleteQuery = vi.fn();
+
+        const from = vi.fn().mockReturnValue({
+            select: prereqSelect,
+            delete: deleteQuery
+        });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser
+            },
+            from
+        });
+
+        const result = await deleteCourse("fake-course");
+
+        expect(result).toEqual({
+            error: "Course not found."
+        });
+
+        expect(deleteQuery).not.toHaveBeenCalled();
+    });
 });

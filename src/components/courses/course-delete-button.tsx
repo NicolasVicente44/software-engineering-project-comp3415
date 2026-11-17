@@ -20,6 +20,10 @@ export function CourseDeleteButton({courseId,courseName,formAction,pending}: Cou
                     event.preventDefault();
                     const form = event.currentTarget;
                     const dependentCourses = await getAnyDependentCourses(courseId);
+                    if (dependentCourses === "not_found") {
+                        window.alert("Course not found.");
+                        return;
+                    }
                     if(dependentCourses === null) {
                         window.alert("Cannot check course dependencies at this moment. Please try again.");
                         return;
