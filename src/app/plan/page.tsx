@@ -1,13 +1,12 @@
 import { redirect } from "next/navigation";
 import { Navbar } from "@/components/navbar";
-import { CreditLimitForm } from "@/components/plan/credit-limit-form";
+import Link from "next/link";
 import {
     DEFAULT_COURSE_CREDITS,
     DEFAULT_CREDIT_LIMIT,
     generatePlan,
 } from "@/lib/planner/generate-plan";
 import { normalizeCourseCode } from "@/lib/prerequisites/check";
-import { saveCreditLimit } from "@/lib/settings/actions";
 import { createClient } from "@/lib/supabase/server";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -112,7 +111,13 @@ export default async function PlanView({
                     </form>
 
                     {!settingsError && (
-                        <CreditLimitForm action={saveCreditLimit} creditLimit={creditLimit} />
+                        <p className="text-sm text-muted-foreground">
+                            Credit limit: <strong className="text-foreground">{creditLimit}</strong> per term
+                            {" · "}
+                            <Link href="/profile" className="font-medium text-foreground underline-offset-4 hover:underline">
+                                Change in Profile
+                            </Link>
+                        </p>
                     )}
                 </div>
 

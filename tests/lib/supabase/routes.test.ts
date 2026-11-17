@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isAuthPage, isProtectedPath } from "@/lib/supabase/routes";
 
 describe("isProtectedPath", () => {
-  it.each(["/dashboard", "/dashboard/settings", "/reset-password"])(
+  it.each(["/dashboard", "/dashboard/settings", "/profile", "/reset-password"])(
     "protects %s",
     (path) => {
       expect(isProtectedPath(path)).toBe(true);
