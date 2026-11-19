@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { recalculateSavedPlan } from "@/lib/planner/saved-plan";
 import { checkPrerequisites, normalizeCourseCode, findDependentCourses, findMissingPrerequisitesInCourseList, looksForCircularPrerequisite} from "@/lib/prerequisites/check";
 
 export type CourseActionState = {
@@ -310,6 +311,8 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
                 prerequisites: dependent ? dependent.prerequisites : course.prerequisites
             };
     });
+    // the status before this edit, to know whether the plan needs updating (us-05)
+    const previousStatus = originalCourse.status;
 
     const missingPrerequisites = findMissingPrerequisitesInCourseList(
         prerequisites,
@@ -430,7 +433,7 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
         for (const dependent of dependentCourses) {
             const { data: updatedDependent, error: dependentUpdateError } = await supabase
                 .from("student_courses")
-                .update({prerequisites: dependent.prerequisites}) // save new prereq list
+                .update({ prerequisites: dependent.prerequisites })
                 .eq("id", dependent.id)
                 .eq("user_id", user.id)
                 .select("id")
@@ -441,6 +444,21 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
                     error: "Course was renamed, but some dependent prerequisites could not be updated."
                 };
             }
+        }
+    }
+
+    // a status change updates the saved plan, and the student is shown the
+    // updated plan (us-05)
+    if (previousStatus && previousStatus !== status) {
+        const change = await recalculateSavedPlan(
+            supabase,
+            user.id,
+            courseCode.trim(),
+            status
+        );
+
+        if (change) {
+            redirect(`/plan?changed=${encodeURIComponent(change.course)}`);
         }
     }
 
