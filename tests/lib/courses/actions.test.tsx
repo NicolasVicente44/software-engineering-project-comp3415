@@ -14,6 +14,14 @@ vi.mock("next/navigation", () => ({
     redirect,
 }));
 
+const { recalculateSavedPlan } = vi.hoisted(() => ({
+    recalculateSavedPlan: vi.fn(),
+}));
+
+vi.mock("@/lib/planner/saved-plan", () => ({
+    recalculateSavedPlan,
+}));
+
 describe("createCourse", () => {
     it("error is returned when the user is not signed in", async () => {
         
@@ -1382,6 +1390,77 @@ describe("deleteCourse", () => {
         expect(deleteQuery).toHaveBeenCalled();
         expect(firstEq).toHaveBeenCalledWith("id", "course-1");
         expect(secondEq).toHaveBeenCalledWith("user_id", "user-1234");
+        expect(redirect).toHaveBeenCalledWith("/courses");
+    });
+});
+describe("updateCourse recalculates the saved plan (us-05)", () => {
+    const formWithStatus = (status: string) => {
+        const formData = new FormData();
+        formData.set("id", "course-123");
+        formData.set("course_name", "Software Engineering");
+        formData.set("course_code", "COMP-3415");
+        formData.set("credits", "1");
+        formData.set("status", status);
+        formData.set("prerequisites", "");
+        return formData;
+    };
+
+    // the course is saved with previousStatus before the edit
+    const mockUpdate = (previousStatus: string) => {
+        const maybeSingle = vi.fn().mockResolvedValue({ data: { id: "course-123" }, error: null });
+        const select = vi.fn().mockReturnValue({ maybeSingle });
+        const secondEq = vi.fn().mockReturnValue({ select });
+        const firstEq = vi.fn().mockReturnValue({ eq: secondEq });
+        const update = vi.fn().mockReturnValue({ eq: firstEq });
+        const coursesEq = vi.fn().mockResolvedValue({
+            data: [{ id: "course-123", course_code: "COMP-3415", status: previousStatus, prerequisites: [] }],
+            error: null
+        });
+        const from = vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({ eq: coursesEq }),
+            update
+        });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1234" } } })
+            },
+            from
+        });
+    };
+
+    it("shows the updated plan when the status changes and a plan is saved", async () => {
+        redirect.mockReset();
+        recalculateSavedPlan.mockReset().mockResolvedValue({
+            course: "COMP-3415", status: "failed", from: 1, to: 2, moved: []
+        });
+        mockUpdate("in_progress");
+
+        await updateCourse({}, formWithStatus("failed"));
+
+        expect(recalculateSavedPlan).toHaveBeenCalledWith(expect.anything(), "user-1234", "COMP-3415", "failed");
+        expect(redirect).toHaveBeenCalledWith("/plan?changed=COMP-3415");
+    });
+
+    it("goes back to the course list when there is no saved plan", async () => {
+        redirect.mockReset();
+        recalculateSavedPlan.mockReset().mockResolvedValue(null);
+        mockUpdate("in_progress");
+
+        await updateCourse({}, formWithStatus("completed"));
+
+        expect(recalculateSavedPlan).toHaveBeenCalled();
+        expect(redirect).toHaveBeenCalledWith("/courses");
+    });
+
+    it("does not touch the plan when the status stays the same", async () => {
+        redirect.mockReset();
+        recalculateSavedPlan.mockReset();
+        mockUpdate("failed");
+
+        await updateCourse({}, formWithStatus("failed"));
+
+        expect(recalculateSavedPlan).not.toHaveBeenCalled();
         expect(redirect).toHaveBeenCalledWith("/courses");
     });
 });

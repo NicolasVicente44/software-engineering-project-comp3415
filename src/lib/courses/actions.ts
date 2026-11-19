@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { recalculateSavedPlan } from "@/lib/planner/saved-plan";
 import { checkPrerequisites, normalizeCourseCode, findDependentCourses, findMissingPrerequisitesInCourseList, looksForCircularPrerequisite} from "@/lib/prerequisites/check";
 
 export type CourseActionState = {
@@ -20,7 +21,7 @@ async function getStudentCoursesForPrerequisites(userId: string) {
 
     return supabase
         .from("student_courses")
-        .select("course_code, prerequisites")
+        .select("id, course_code, status, prerequisites")
         .eq("user_id", userId);
 }
 
@@ -250,6 +251,9 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
         };
     }
 
+    // the status before this edit, to know whether the plan needs updating (us-05)
+    const previousStatus = studentCourses?.find(course => course.id === courseId)?.status;
+
     const missingPrerequisites = findMissingPrerequisitesInCourseList(
         prerequisites,
         studentCourses ?? []
@@ -345,6 +349,16 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
         return {
             error: "Course not found or you do not have permission to update it."
         };
+    }
+
+    // a status change updates the saved plan, and the student is shown the
+    // updated plan (us-05)
+    if (previousStatus && previousStatus !== status) {
+        const change = await recalculateSavedPlan(supabase, user.id, courseCode.trim(), status);
+
+        if (change) {
+            redirect(`/plan?changed=${encodeURIComponent(change.course)}`);
+        }
     }
 
     redirect("/courses");
