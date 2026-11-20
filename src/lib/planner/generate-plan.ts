@@ -1,5 +1,4 @@
 import { normalizeCourseCode } from "@/lib/prerequisites/check";
-import { PREREQUISITES } from "@/lib/prerequisites/data";
 
 // credit limit used when a student has not saved one (us-06)
 export const DEFAULT_CREDIT_LIMIT = 2.5;
@@ -46,7 +45,7 @@ const byCode = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 export function generatePlan(
   completedCodes: string[],
   required: string[],
-  rawPrereqMap: Record<string, string[]> = PREREQUISITES,
+  rawPrereqMap: Record<string, string[]> = {},
   { creditLimit = Infinity, credits: rawCredits = {} }: PlanOptions = {},
 ): PlanResult {
   // normalise the map keys so lookups match normalised course codes
