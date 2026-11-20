@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { getTermDates } from "@/lib/calendar/terms";
-import { loadPlan } from "@/lib/planner/load-plan";
+import { loadPlanData } from "@/lib/planner/saved-plan";
 import { createClient } from "@/lib/supabase/server";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -32,10 +33,22 @@ export default async function CalendarView() {
         redirect("/login");
     }
 
-    const { plan, error } = await loadPlan(supabase, user.id);
+    const { coursesError, settingsError, savedPlan } = await loadPlanData(supabase, user.id);
 
-    const dates = getTermDates(plan?.terms.length ?? 0);
-    const terms = (plan?.terms ?? []).map((term, i) => ({ ...dates[i], courses: term.courses }));
+    if (coursesError) {
+        console.error("Failed to load courses for calendar: ", coursesError);
+    }
+    if (settingsError) {
+        console.error("Failed to load saved plan for calendar: ", settingsError);
+    }
+
+    const loadFailed = Boolean(coursesError || settingsError);
+    const plan = loadFailed ? null : savedPlan;
+
+    // dates are matched by term number so they line up with my plan (us-10)
+    const savedTerms = plan?.terms ?? [];
+    const dates = getTermDates(Math.max(0, ...savedTerms.map((term) => term.term)));
+    const terms = savedTerms.map((term) => ({ ...dates[term.term - 1], courses: term.courses }));
 
     return (
         <div className="flex flex-1 flex-col">
@@ -45,7 +58,7 @@ export default async function CalendarView() {
                     <div>
                         <h1 className="text-2xl font-semibold">My Calendar</h1>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            Your planned courses by term. Term dates are approximate.
+                            Your saved plan by term. Term dates are approximate.
                         </p>
                     </div>
 
@@ -56,7 +69,7 @@ export default async function CalendarView() {
                     )}
                 </div>
 
-                {error && (
+                {loadFailed && (
                     <Alert variant="destructive" className="mt-4">
                         <AlertDescription>
                             Unable to load your plan. Please try again.
@@ -64,10 +77,24 @@ export default async function CalendarView() {
                     </Alert>
                 )}
 
-                {plan?.complete && (
+                {!loadFailed && !plan && (
                     <Alert className="mt-4" role="status">
                         <AlertDescription>
-                            No courses to show. Add courses as in progress or failed on the Courses page.
+                            <p>
+                                You don&apos;t have a plan yet. Generate one on the{" "}
+                                <Link href="/plan" className="font-medium text-foreground underline underline-offset-4">
+                                    My Plan
+                                </Link>{" "}
+                                page.
+                            </p>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {plan && plan.terms.length === 0 && plan.unschedulable.length === 0 && (
+                    <Alert className="mt-4" role="status">
+                        <AlertDescription>
+                            No courses to show. Add courses as in progress, failed or dropped on the Courses page.
                         </AlertDescription>
                     </Alert>
                 )}
@@ -89,11 +116,15 @@ export default async function CalendarView() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <ul className="list-disc pl-5">
-                                {term.courses.map((code) => (
-                                    <li key={code}>{code}</li>
-                                ))}
-                            </ul>
+                            {term.courses.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">No courses this term.</p>
+                            ) : (
+                                <ul className="list-disc pl-5">
+                                    {term.courses.map((code) => (
+                                        <li key={code}>{code}</li>
+                                    ))}
+                                </ul>
+                            )}
                         </CardContent>
                     </Card>
                 ))}

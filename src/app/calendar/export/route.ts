@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { buildIcs } from "@/lib/calendar/ics";
 import { getTermDates } from "@/lib/calendar/terms";
-import { loadPlan } from "@/lib/planner/load-plan";
+import { loadPlanData } from "@/lib/planner/saved-plan";
 import { createClient } from "@/lib/supabase/server";
 
-// downloads the student's plan as an .ics file (us-10)
+// downloads the student's saved plan as an .ics file (us-10)
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -15,14 +15,20 @@ export async function GET() {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
-  const { plan, error } = await loadPlan(supabase, user.id);
+  const { coursesError, settingsError, savedPlan } = await loadPlanData(supabase, user.id);
 
-  if (error || !plan) {
+  if (coursesError || settingsError) {
+    console.error("Failed to load plan for calendar export: ", coursesError ?? settingsError);
     return new NextResponse("Unable to load your plan", { status: 500 });
   }
 
-  const dates = getTermDates(plan.terms.length);
-  const terms = plan.terms.map((term, i) => ({ ...dates[i], courses: term.courses }));
+  if (!savedPlan) {
+    return new NextResponse("No saved plan", { status: 404 });
+  }
+
+  // dates are matched by term number so they line up with my plan (us-10)
+  const dates = getTermDates(Math.max(0, ...savedPlan.terms.map((term) => term.term)));
+  const terms = savedPlan.terms.map((term) => ({ ...dates[term.term - 1], courses: term.courses }));
 
   return new NextResponse(buildIcs(terms), {
     headers: {

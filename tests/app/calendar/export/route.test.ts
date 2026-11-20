@@ -11,13 +11,15 @@ vi.mock("@/lib/supabase/server", () => ({
 import { GET } from "@/app/calendar/export/route";
 
 const mockSupabase = (
-  result: { data: unknown; error: unknown },
+  courses: { data: unknown; error: unknown },
+  settings: { data: unknown; error: unknown } = { data: null, error: null },
   user: { id: string } | null = { id: "user-1234" },
 ) => {
-  const eq = vi.fn().mockResolvedValue(result);
+  const eq = vi.fn().mockResolvedValue(courses);
   const select = vi.fn().mockReturnValue({ eq });
-  const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
-  const settingsSelect = vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) });
+  const maybeSingle = vi.fn().mockResolvedValue(settings);
+  const settingsEq = vi.fn().mockReturnValue({ maybeSingle });
+  const settingsSelect = vi.fn().mockReturnValue({ eq: settingsEq });
   const from = vi.fn((table: string) =>
     table === "student_settings" ? { select: settingsSelect } : { select },
   );
@@ -27,13 +29,36 @@ const mockSupabase = (
     from,
   });
 
-  return { from, eq };
+  return { from, eq, settingsSelect, settingsEq };
 };
+
+const course = (course_code: string, status = "in_progress") => ({
+  course_code,
+  course_name: `${course_code} name`,
+  credits: 0.5,
+  status,
+  prerequisites: [],
+});
+
+const savedPlan = (terms: { term: number; courses: string[] }[]) => ({
+  data: {
+    credit_limit: 2.5,
+    saved_plan: { terms, creditLimit: 2.5, generatedAt: "2026-11-16T00:00:00Z", unschedulable: [] },
+  },
+  error: null,
+});
+
+const COURSES = {
+  data: [course("COMP-2477"), course("COMP-3415"), course("COMP-4411", "failed")],
+  error: null,
+};
+
+const DB_ERROR = { data: null, error: { message: "Error in database" } };
 
 describe("GET /calendar/export (us-10)", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date(2026, 10, 16, 12));
+    vi.setSystemTime(new Date(2026, 10, 20, 12));
   });
 
   afterEach(() => {
@@ -41,7 +66,7 @@ describe("GET /calendar/export (us-10)", () => {
   });
 
   it("returns 401 when there is no user", async () => {
-    const { from } = mockSupabase({ data: [], error: null }, null);
+    const { from } = mockSupabase(COURSES, undefined, null);
 
     const response = await GET();
 
@@ -49,8 +74,11 @@ describe("GET /calendar/export (us-10)", () => {
     expect(from).not.toHaveBeenCalled();
   });
 
-  it("returns 500 when the plan cannot be loaded", async () => {
-    mockSupabase({ data: null, error: { message: "Error in database" } });
+  it.each([
+    ["courses", DB_ERROR, savedPlan([{ term: 1, courses: ["COMP-2477"] }])],
+    ["saved plan", COURSES, DB_ERROR],
+  ])("returns 500 when the %s cannot be loaded", async (_, courses, settings) => {
+    mockSupabase(courses, settings);
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const response = await GET();
@@ -59,56 +87,74 @@ describe("GET /calendar/export (us-10)", () => {
     expect(response.status).toBe(500);
   });
 
-  it("returns the plan as an .ics download", async () => {
-    mockSupabase({ data: [{ course_code: "COMP-2477", status: "in_progress" }], error: null });
+  it("returns 404 when there is no saved plan", async () => {
+    mockSupabase(COURSES);
 
     const response = await GET();
 
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe("No saved plan");
+  });
+
+  it("AC3: returns the saved plan as an .ics download", async () => {
+    const { eq, settingsSelect, settingsEq } = mockSupabase(
+      COURSES,
+      savedPlan([
+        { term: 1, courses: ["COMP-2477"] },
+        { term: 2, courses: ["COMP-3415"] },
+      ]),
+    );
+
+    const response = await GET();
+    const body = await response.text();
+
+    expect(eq).toHaveBeenCalledWith("user_id", "user-1234");
+    expect(settingsSelect).toHaveBeenCalledWith("credit_limit, saved_plan");
+    expect(settingsEq).toHaveBeenCalledWith("user_id", "user-1234");
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/calendar; charset=utf-8");
     expect(response.headers.get("content-disposition")).toBe(
       'attachment; filename="gradpath-plan.ics"',
     );
-  });
-
-  it("AC3: includes the planned courses in their terms", async () => {
-    const { eq } = mockSupabase({
-      data: [
-        { course_code: "COMP-1411", status: "completed" },
-        { course_code: "COMP-2477", status: "in_progress" },
-        { course_code: "COMP-3415", status: "in_progress", prerequisites: ["COMP-2477"] },
-      ],
-      error: null,
-    });
-
-    const body = await (await GET()).text();
-
-    expect(eq).toHaveBeenCalledWith("user_id", "user-1234");
     expect(body).toMatch(/^BEGIN:VCALENDAR\r\n/);
     expect(body).toContain("SUMMARY:COMP-2477\r\n");
-    expect(body).toContain("SUMMARY:COMP-3415\r\n");
     expect(body).toContain("DESCRIPTION:Term 1 · Winter 2027\r\n");
+    expect(body).toContain("SUMMARY:COMP-3415\r\n");
     expect(body).toContain("DESCRIPTION:Term 2 · Fall 2027\r\n");
-    expect(body).not.toContain("COMP-1411");
+    // only the saved plan is exported, not a freshly generated one (us-10)
+    expect(body).not.toContain("COMP-4411");
   });
 
-  it("AC2: the file changes when the planned courses change", async () => {
-    mockSupabase({ data: [{ course_code: "COMP-2477", status: "in_progress" }], error: null });
+  it("AC2: a different saved plan gives a different file", async () => {
+    mockSupabase(COURSES, savedPlan([{ term: 1, courses: ["COMP-2477", "COMP-3415"] }]));
     const before = await (await GET()).text();
 
-    mockSupabase({ data: [{ course_code: "COMP-4411", status: "failed" }], error: null });
+    // e.g. after COMP-2477 is failed and the plan is recalculated (us-05)
+    mockSupabase(
+      COURSES,
+      savedPlan([
+        { term: 1, courses: [] },
+        { term: 2, courses: ["COMP-2477"] },
+        { term: 3, courses: ["COMP-3415"] },
+      ]),
+    );
     const after = await (await GET()).text();
 
-    expect(before).toContain("SUMMARY:COMP-2477\r\n");
-    expect(after).toContain("SUMMARY:COMP-4411\r\n");
-    expect(after).not.toContain("COMP-2477");
+    expect(before).toContain("DESCRIPTION:Term 1 · Winter 2027\r\n");
+    expect(before).not.toContain("Fall 2027");
+    expect(after).toContain("DESCRIPTION:Term 2 · Fall 2027\r\n");
+    expect(after).toContain("DESCRIPTION:Term 3 · Winter 2028\r\n");
+    expect(after).toContain("SUMMARY:Winter 2027 starts\r\n");
+    expect(after).not.toContain("DESCRIPTION:Term 1");
   });
 
-  it("returns a calendar with no events when there is nothing to plan", async () => {
-    mockSupabase({ data: [], error: null });
+  it("returns a calendar with no events for an empty saved plan", async () => {
+    mockSupabase(COURSES, savedPlan([]));
 
-    const body = await (await GET()).text();
+    const response = await GET();
+    const body = await response.text();
 
+    expect(response.status).toBe(200);
     expect(body).toContain("BEGIN:VCALENDAR\r\n");
     expect(body).not.toContain("BEGIN:VEVENT");
   });
