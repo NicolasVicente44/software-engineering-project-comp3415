@@ -1,5 +1,3 @@
-import { PREREQUISITES } from "./data";
-
 // normalize course code to DEPT-NUMBER (us-03)
 export function normalizeCourseCode(raw: string): string {
   const cleaned = raw.trim().toUpperCase().replace(/[\s_-]/g, "");
@@ -18,7 +16,7 @@ export type PrereqResult = {
 export function checkPrerequisites(
   targetCode: string,
   studentCourses: { course_code: string; status: string }[],
-  prereqMap: Record<string, string[]> = PREREQUISITES,
+  prereqMap: Record<string, string[]> = {},
 ): PrereqResult {
   const required = prereqMap[normalizeCourseCode(targetCode)] ?? [];
   const completed = new Set(

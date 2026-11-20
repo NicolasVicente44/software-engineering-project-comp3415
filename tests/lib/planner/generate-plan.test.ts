@@ -137,8 +137,13 @@ describe("generatePlan", () => {
     });
   });
 
-  it("uses the program's prerequisites by default", () => {
-    const { terms, complete } = generatePlan([], ["COMP-3415"]);
+  it("uses student-added prerequisites for a course to generate a plan", () => {
+    const prereqMap = {
+    "COMP-3415": ["COMP-2412", "COMP-2477"],
+    "COMP-2412": ["COMP-1431"],
+    "COMP-1431": ["COMP-1411"],
+    };
+    const { terms, complete } = generatePlan([], ["COMP-3415"], prereqMap);
     const placed = allCourses(terms);
 
     expect(complete).toBe(false);

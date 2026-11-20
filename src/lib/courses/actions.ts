@@ -21,12 +21,12 @@ async function getStudentCoursesForPrerequisites(userId: string) {
 
     return supabase
         .from("student_courses")
-        .select("id, course_code, status, prerequisites")
+        .select("id, course_code, prerequisites, status")
         .eq("user_id", userId);
 }
 
 // get the required info for findDependentCourses to be able to search for the courses that an attempted deleted course is needed for
-export async function getAnyDependentCourses(courseId: string): Promise<string[] | null> {
+export async function getAnyDependentCourses(courseId: string): Promise<string[] | null | "not_found"> {
     const supabase = await createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -48,7 +48,7 @@ export async function getAnyDependentCourses(courseId: string): Promise<string[]
     const targetCourse = studentCourses?.find(course => course.id === courseId);
 
     if (!targetCourse) {
-        return null;
+        return "not_found";
     }
 
     return findDependentCourses(targetCourse.course_code, studentCourses ?? []);
@@ -103,16 +103,16 @@ export async function createCourse(_previousState: CourseActionState, formData: 
     const { data: studentCourses, error: queryError } =
         await getStudentCoursesForPrerequisites(user.id);
 
-    if (queryError) {
+    if (queryError || !studentCourses) {
         console.error("Failed to load courses: ", queryError);
         return {
-            error: "There was an issue with validating your prerequisites. Please try again."
+            error: "There was an issue loading your courses. Please try again."
         };
     }
 
     const missingPrerequisites = findMissingPrerequisitesInCourseList(
         prerequisites,
-        studentCourses ?? []
+        studentCourses
     );
 
     // any prerequisite found here is not in the course list already, and needs to be added first
@@ -123,7 +123,7 @@ export async function createCourse(_previousState: CourseActionState, formData: 
     }
 
     // checks if a cycle was detected
-    if (looksForCircularPrerequisite(courseCode, prerequisites, studentCourses ?? [])) {
+    if (looksForCircularPrerequisite(courseCode, prerequisites, studentCourses)) {
         return {
             error: "Adding this course with this prerequisite would cause a circular prerequisite."
         };
@@ -244,19 +244,79 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
     const { data: studentCourses, error: queryError } =
         await getStudentCoursesForPrerequisites(user.id);
 
-    if (queryError) {
+    if (queryError || !studentCourses) {
         console.error("Failed to load courses: ", queryError);
         return {
-            error: "There was an issue with validating your prerequisites. Please try again."
+            error: "There was an issue with validating your courses. Please try again."
         };
     }
 
+    // gets the original course by id to use to find the course code that is changing
+    const originalCourse = studentCourses.find( 
+        course => course.id === courseId
+    );
+
+    if (!originalCourse) {
+        return {
+            error: "Course not found."
+        };
+    }
+
+    const oldCourseCode = normalizeCourseCode(originalCourse.course_code);
+    const newCourseCode = normalizeCourseCode(courseCode);
+
+    // checks if any of the current studentCourses are equal to the newCourseCode
+    const preventDuplicateCourse = studentCourses.some(
+        course => 
+            course.id !== courseId &&
+            normalizeCourseCode(course.course_code) === newCourseCode
+    );
+
+    if (preventDuplicateCourse) {
+        return {
+            error: `Please try a different course code, another course already uses ${newCourseCode}`
+        };
+    }
+
+    const dependentCourses = studentCourses 
+    // grabs any course that has the oldCourseCode in their prereq list
+        .filter(course =>
+            course.id !== courseId && 
+            course.prerequisites.some((prereq: string) => normalizeCourseCode(prereq) === oldCourseCode)
+        )
+        // puts any course that had the originalCourse as a prereq in the list with it's id and updated prereq list
+        .map(course => ({
+            id: course.id,
+            prerequisites: course.prerequisites.map((prereq: string) =>
+                normalizeCourseCode(prereq) === oldCourseCode ? newCourseCode : prereq
+            )
+        }));
+
+    // will allow the DFS logic to search through the updated courses
+    const newStudentCourses = studentCourses.map(course => {
+            // currently edited course
+            if (course.id === courseId) {
+                return {
+                    course_code: newCourseCode,
+                    prerequisites
+                };
+            }
+
+            // looks if the course being checked is already in the dependent list
+            const dependent = dependentCourses.find(dependent => dependent.id === course.id);
+            
+            return {
+                course_code: normalizeCourseCode(course.course_code),
+                // uses dependent prereqs if already in list, or normal prereqs if not
+                prerequisites: dependent ? dependent.prerequisites : course.prerequisites
+            };
+    });
     // the status before this edit, to know whether the plan needs updating (us-05)
-    const previousStatus = studentCourses?.find(course => course.id === courseId)?.status;
+    const previousStatus = originalCourse.status;
 
     const missingPrerequisites = findMissingPrerequisitesInCourseList(
         prerequisites,
-        studentCourses ?? []
+        newStudentCourses
     );
 
     if (missingPrerequisites.length > 0) {
@@ -265,7 +325,7 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
         };
     }
 
-    if (looksForCircularPrerequisite(courseCode, prerequisites, studentCourses ?? [])) {
+    if (looksForCircularPrerequisite(newCourseCode, prerequisites, newStudentCourses)) {
         return {
             error: "Editing this course with this prerequisite would cause a circular prerequisite."
         };
@@ -320,7 +380,24 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
         }
     }
 
-    // ADD A CHECK HERE TO PREVENT COMPLETED COURSES BEING SET TO OTHER STATUSES IF A DIFFERENT COURSE DEPENDS ON IT
+    // checks the original status with new status
+    // new status can still be inprogress because the planner will just generate the plan with the prerequisites in earlier terms instead
+    if(originalCourse.status === "completed" && (status === "failed" || status === "dropped")) {
+        const changedCourses = studentCourses.filter(course =>
+            course.id !== courseId &&
+            (course.status === "in_progress" || course.status === "completed") && // if the course is in progress or completed, and a prereq is now failed or dropped it will add it to the list
+            course.prerequisites.some(
+                (prereq: string) => normalizeCourseCode(prereq) === oldCourseCode
+            )
+        );
+
+        // if there is at least one dependent course
+        if(changedCourses.length > 0) {
+            return {
+                error: `You cannot change the status of ${oldCourseCode} as it is required by the following course(s): ${changedCourses.map(course => course.course_code).join(", ")}`
+            };
+        }
+    }
 
     // Update only the course belonging to the logged-in user
     const { data, error } = await supabase
@@ -351,10 +428,34 @@ export async function updateCourse(_previousState: CourseActionState,formData: F
         };
     }
 
+    // update the dependents in supabase if the course code was changed
+    if (oldCourseCode !== newCourseCode) {
+        for (const dependent of dependentCourses) {
+            const { data: updatedDependent, error: dependentUpdateError } = await supabase
+                .from("student_courses")
+                .update({ prerequisites: dependent.prerequisites })
+                .eq("id", dependent.id)
+                .eq("user_id", user.id)
+                .select("id")
+                .maybeSingle();
+
+            if (dependentUpdateError || !updatedDependent) {
+                return {
+                    error: "Course was renamed, but some dependent prerequisites could not be updated."
+                };
+            }
+        }
+    }
+
     // a status change updates the saved plan, and the student is shown the
     // updated plan (us-05)
     if (previousStatus && previousStatus !== status) {
-        const change = await recalculateSavedPlan(supabase, user.id, courseCode.trim(), status);
+        const change = await recalculateSavedPlan(
+            supabase,
+            user.id,
+            courseCode.trim(),
+            status
+        );
 
         if (change) {
             redirect(`/plan?changed=${encodeURIComponent(change.course)}`);
@@ -382,6 +483,12 @@ export async function deleteCourse(courseId: string, confirmed: boolean = false)
 
     const dependentCourses = await getAnyDependentCourses(courseId);
 
+    if (dependentCourses === "not_found") {
+        return {
+            error: "Course not found."
+        };
+    }
+
     if (dependentCourses === null) {
         return {
             error: "There was an issue with verifying your dependencies. Please try again."
@@ -390,11 +497,60 @@ export async function deleteCourse(courseId: string, confirmed: boolean = false)
 
     if (dependentCourses.length > 0 && !confirmed) {
         return {
-            error: `This course is required by the following course(s): ${dependentCourses.join(", ")}. Please confirm first whether you want to delete them or not first.`
+            error: `This course is required by the following course(s): ${dependentCourses.join(", ")}. Deleting it will also remove it from their prerequisite lists. Please confirm.`
         };
     }
 
-    const { data, error } = await supabase
+     const { data: studentCourses, error: queryError } =
+        await getStudentCoursesForPrerequisites(user.id);
+
+    if (queryError || !studentCourses) {
+        console.error("Failed to load courses: ", queryError);
+        return {
+            error: "There was an issue loading your courses. Please try again."
+        };
+    }
+
+    const originalCourse = studentCourses.find(course => course.id === courseId); // stores the original course object by checking the courses of the student
+    if(!originalCourse) {
+        return {
+            error: "Course not found."
+        }
+    }
+
+    // gets the deleted course code to find it in other courses prereq lists
+    const deletedCourseCode = normalizeCourseCode(originalCourse.course_code)
+    const coursesToUpdate = studentCourses // gets a list of the courses that depended on the delete course and removes it from their prereq list
+        .filter(course =>
+            course.id !== courseId &&
+            course.prerequisites.some(
+                (prereq: string) => normalizeCourseCode(prereq) === deletedCourseCode
+            )
+        )
+        .map(course => ({
+            id: course.id,
+            prerequisites: course.prerequisites.filter(
+                (prereq: string) => normalizeCourseCode(prereq) !== deletedCourseCode
+            )
+        }));
+
+    for (const course of coursesToUpdate) { // will remove the course to be deleted from any dependent courses prereq lists before actually deleting the course
+        const { data: updatedCourse, error: updateError } = await supabase
+            .from("student_courses")
+            .update({ prerequisites: course.prerequisites })
+            .eq("id", course.id)
+            .eq("user_id", user.id)
+            .select("id")
+            .maybeSingle();
+
+        if (updateError || !updatedCourse) {
+            console.error("Failed to update dependent prerequisites", updateError)
+            return {
+                error: "Unable to update dependent prerequisites. Course was not deleted."
+            };
+        }
+    }
+    const { data, error } = await supabase // deletes the actual user specified course
         .from("student_courses")
         .delete()
         .eq("id", courseId)
@@ -407,7 +563,6 @@ export async function deleteCourse(courseId: string, confirmed: boolean = false)
         return {
             error: "Unable to delete course. Please try again."
         };
-
     }
 
     if (!data) {
