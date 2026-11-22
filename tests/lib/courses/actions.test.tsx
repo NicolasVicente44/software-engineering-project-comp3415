@@ -14,6 +14,14 @@ vi.mock("next/navigation", () => ({
     redirect,
 }));
 
+const { recalculateSavedPlan } = vi.hoisted(() => ({
+    recalculateSavedPlan: vi.fn(),
+}));
+
+vi.mock("@/lib/planner/saved-plan", () => ({
+    recalculateSavedPlan,
+}));
+
 describe("createCourse", () => {
     it("error is returned when the user is not signed in", async () => {
         
@@ -572,6 +580,8 @@ describe("updateCourse", () => {
         return formData;
     };
 
+
+
     const mockLoggedInUser = () => {
         const getUser = vi.fn().mockResolvedValue({
             data: {
@@ -641,11 +651,10 @@ describe("updateCourse", () => {
         const result = await updateCourse({}, validFormData());
 
         expect(result).toEqual({
-            error: "Course not found or you do not have permission to update it."
+            error: "Course not found."
         });
 
-        expect(firstEq).toHaveBeenCalledWith("id", "course-123");
-        expect(secondEq).toHaveBeenCalledWith("user_id", "user-1234");
+        expect(update).not.toHaveBeenCalled();
     });
 
     it("course is updated when valid course ID exists and information is valid", async () => {
@@ -662,7 +671,13 @@ describe("updateCourse", () => {
         const update = vi.fn().mockReturnValue({ eq: firstEq });
         const prerequisiteEq = vi.fn()
             .mockResolvedValueOnce({
-                data: [],
+                data: [
+                    {
+                        id: "course-123",
+                        course_code: "COMP-3415",
+                        prerequisites: []
+                    }
+                ],
                 error: null
             })
             .mockResolvedValueOnce({
@@ -776,7 +791,13 @@ describe("updateCourse", () => {
         mockLoggedInUser();
 
         const eq = vi.fn().mockResolvedValue({
-            data: [],
+            data: [
+                    {
+                        id: "course-123",
+                        course_code: "COMP-3415",
+                        prerequisites: []
+                    }
+                ],
             error: null
         });
 
@@ -806,7 +827,13 @@ describe("updateCourse", () => {
         mockLoggedInUser();
 
         const eq = vi.fn().mockResolvedValue({
-            data: [],
+            data: [
+                    {
+                        id: "course-123",
+                        course_code: "COMP-3415",
+                        prerequisites: []
+                    }
+                ],
             error: null
         });
 
@@ -836,7 +863,13 @@ describe("updateCourse", () => {
         mockLoggedInUser();
 
         const eq = vi.fn().mockResolvedValue({
-            data: [],
+            data: [
+                    {
+                        id: "course-123",
+                        course_code: "COMP-3415",
+                        prerequisites: []
+                    }
+                ],
             error: null
         });
 
@@ -866,7 +899,13 @@ describe("updateCourse", () => {
         mockLoggedInUser();
 
         const eq = vi.fn().mockResolvedValue({
-            data: [],
+            data: [
+                    {
+                        id: "course-123",
+                        course_code: "COMP-3415",
+                        prerequisites: []
+                    }
+                ],
             error: null
         });
 
@@ -905,7 +944,13 @@ describe("updateCourse", () => {
         const firstEq = vi.fn().mockReturnValue({ eq: secondEq });
         const update = vi.fn().mockReturnValue({ eq: firstEq });
         const prereqEq = vi.fn().mockResolvedValue({
-            data: [],
+            data: [
+                    {
+                        id: "course-123",
+                        course_code: "COMP-3415",
+                        prerequisites: []
+                    }
+                ],
             error: null
         });
 
@@ -942,10 +987,12 @@ describe("updateCourse", () => {
         const prereqEq = vi.fn().mockResolvedValue({
             data: [
                 {
+                    id: "course-1",
                     course_code: "COMP-1000",
                     prerequisites: ["COMP-2000"]
                 },
                 {
+                    id: "course-2",
                     course_code: "COMP-2000",
                     prerequisites: []
                 }
@@ -994,6 +1041,7 @@ describe("updateCourse", () => {
         const prereqEq = vi.fn().mockResolvedValue({
             data: [
                 {
+                    id: "course-123",
                     course_code: "COMP-3145",
                     prerequisites: []
                 }
@@ -1034,6 +1082,295 @@ describe("updateCourse", () => {
         expect(update).not.toHaveBeenCalled();
     });
 
+    it("updates dependent prerequisites when a course code is renamed", async () => {
+        mockLoggedInUser();
+
+        const maybeSingle = vi.fn()
+            .mockResolvedValueOnce({
+                data: { id: "course-1" },
+                error: null
+            })
+            .mockResolvedValueOnce({
+                data: { id: "course-2" },
+                error: null
+            });
+
+        const select = vi.fn().mockReturnValue({ maybeSingle });
+        const secondEq = vi.fn().mockReturnValue({ select });
+        const firstEq = vi.fn().mockReturnValue({ eq: secondEq });
+        const update = vi.fn().mockReturnValue({ eq: firstEq });
+
+        const prerequisiteEq = vi.fn().mockResolvedValue({
+            data: [
+                {
+                    id: "course-1",
+                    course_code: "COMP-1000",
+                    prerequisites: []
+                },
+                {
+                    id: "course-2",
+                    course_code: "COMP-2000",
+                    prerequisites: ["COMP-1000"]
+                }
+            ],
+            error: null
+        });
+
+        const prerequisiteSelect = vi.fn().mockReturnValue({
+            eq: prerequisiteEq
+        });
+
+        const from = vi.fn().mockReturnValue({
+            select: prerequisiteSelect,
+            update
+        });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({
+                    data: { user: { id: "user-1234" } }
+                })
+            },
+            from
+        });
+
+        const formData = validFormData();
+        formData.set("id", "course-1");
+        formData.set("course_code", "COMP-1500");
+        formData.set("status", "completed");
+
+        const result = await updateCourse({}, formData);
+
+        expect(update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                course_code: "COMP-1500"
+            })
+        );
+
+        expect(update).toHaveBeenCalledWith({
+            prerequisites: ["COMP-1500"]
+        });
+
+        expect(update).toHaveBeenCalledTimes(2);
+
+        expect(firstEq).toHaveBeenCalledWith("id", "course-2");
+
+        expect(redirect).toHaveBeenCalledWith("/courses");
+        expect(result).toBeUndefined();
+    });
+
+    it("returns an error when updating dependent prerequisites fails", async () => {
+        mockLoggedInUser();
+
+        const maybeSingle = vi.fn()
+            .mockResolvedValueOnce({
+                data: { id: "course-1" },
+                error: null
+            })
+            .mockResolvedValueOnce({
+                data: null,
+                error: { message: "Database update failed" }
+            });
+
+        const select = vi.fn().mockReturnValue({ maybeSingle });
+        const secondEq = vi.fn().mockReturnValue({ select });
+        const firstEq = vi.fn().mockReturnValue({ eq: secondEq });
+        const update = vi.fn().mockReturnValue({ eq: firstEq });
+
+        const prerequisiteEq = vi.fn().mockResolvedValue({
+            data: [
+                {
+                    id: "course-1",
+                    course_code: "COMP-1000",
+                    prerequisites: []
+                },
+                {
+                    id: "course-2",
+                    course_code: "COMP-2000",
+                    prerequisites: ["COMP-1000"]
+                }
+            ],
+            error: null
+        });
+
+        const prerequisiteSelect = vi.fn().mockReturnValue({
+            eq: prerequisiteEq
+        });
+
+        const from = vi.fn().mockReturnValue({
+            select: prerequisiteSelect,
+            update
+        });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({
+                    data: { user: { id: "user-1234" } }
+                })
+            },
+            from
+        });
+
+        const formData = validFormData();
+        formData.set("id", "course-1");
+        formData.set("course_code", "COMP-1500");
+        formData.set("status", "completed");
+
+        const result = await updateCourse({}, formData);
+
+        // the course update would still succeed
+        expect(update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                course_code: "COMP-1500"
+            })
+        );
+
+        expect(update).toHaveBeenCalledWith({
+            prerequisites: ["COMP-1500"]
+        });
+
+        expect(update).toHaveBeenCalledTimes(2);
+
+        expect(result).toEqual({ // error when actually updating dependents
+            error: "Course was renamed, but some dependent prerequisites could not be updated."
+        });
+
+        expect(redirect).not.toHaveBeenCalled();
+    });
+
+    it("prevents changing a completed prerequisite to failed when another course depends on it", async () => {
+        mockLoggedInUser();
+
+        const prerequisiteEq = vi.fn().mockResolvedValue({
+            data: [
+                {
+                    id: "course-1",
+                    course_code: "COMP-1000",
+                    status: "completed",
+                    prerequisites: []
+                },
+                {
+                    id: "course-2",
+                    course_code: "COMP-2000",
+                    status: "in_progress",
+                    prerequisites: ["COMP-1000"]
+                }
+            ],
+            error: null
+        });
+
+        const prerequisiteSelect = vi.fn().mockReturnValue({
+            eq: prerequisiteEq
+        });
+
+        const update = vi.fn();
+
+        const from = vi.fn().mockReturnValue({
+            select: prerequisiteSelect,
+            update
+        });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({
+                    data: { user: { id: "user-1234" } }
+                })
+            },
+            from
+        });
+
+        const formData = validFormData();
+        formData.set("id", "course-1");
+        formData.set("course_code", "COMP-1000");
+        formData.set("status", "failed");
+
+        const result = await updateCourse({}, formData);
+
+        expect(result).toEqual({
+            error: "You cannot change the status of COMP-1000 as it is required by the following course(s): COMP-2000"
+        });
+
+        expect(update).not.toHaveBeenCalled();
+        expect(redirect).not.toHaveBeenCalled();
+    });
+
+    it("allows changing a completed prerequisite to in_progress when another course depends on it", async () => {
+        mockLoggedInUser();
+
+        const maybeSingle = vi.fn().mockResolvedValue({
+            data: { id: "course-1" },
+            error: null
+        });
+
+        const select = vi.fn().mockReturnValue({ maybeSingle });
+        const secondEq = vi.fn().mockReturnValue({ select });
+        const firstEq = vi.fn().mockReturnValue({ eq: secondEq });
+        const update = vi.fn().mockReturnValue({ eq: firstEq });
+
+        const prerequisiteEq = vi.fn()
+            .mockResolvedValueOnce({
+                data: [
+                    {
+                        id: "course-1",
+                        course_code: "COMP-1000",
+                        status: "completed",
+                        prerequisites: []
+                    },
+                    {
+                        id: "course-2",
+                        course_code: "COMP-2000",
+                        status: "in_progress",
+                        prerequisites: ["COMP-1000"]
+                    }
+                ],
+                error: null
+            })
+            .mockResolvedValueOnce({
+                data: [
+                    {
+                        course_code: "COMP-2000",
+                        status: "in_progress"
+                    }
+                ],
+                error: null
+            });
+
+        const prerequisiteSelect = vi.fn().mockReturnValue({
+            eq: prerequisiteEq
+        });
+
+        const from = vi.fn().mockReturnValue({
+            select: prerequisiteSelect,
+            update
+        });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({
+                    data: { user: { id: "user-1234" } }
+                })
+            },
+            from
+        });
+
+        const formData = validFormData();
+        formData.set("id", "course-1");
+        formData.set("course_code", "COMP-1000");
+        formData.set("status", "in_progress");
+
+        const result = await updateCourse({}, formData);
+
+        expect(update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                status: "in_progress",
+                course_code: "COMP-1000"
+            })
+        );
+
+        expect(update).toHaveBeenCalledTimes(1);
+        expect(redirect).toHaveBeenCalledWith("/courses");
+        expect(result).toBeUndefined();
+    });
 });
 
 describe("deleteCourse", () => {
@@ -1322,7 +1659,7 @@ describe("deleteCourse", () => {
         const result = await deleteCourse("course-1");
 
         expect(result).toEqual({
-            error: "This course is required by the following course(s): COMP-2000, COMP-3000. Please confirm first whether you want to delete them or not first."
+            error: "This course is required by the following course(s): COMP-2000, COMP-3000. Deleting it will also remove it from their prerequisite lists. Please confirm."
         });
 
         expect(deleteQuery).not.toHaveBeenCalled();
@@ -1367,8 +1704,29 @@ describe("deleteCourse", () => {
             eq: firstEq
         });
 
+        const updateMaybeSingle = vi.fn().mockResolvedValue({
+            data: { id: "course-2" },
+            error: null
+        });
+
+        const updateSelect = vi.fn().mockReturnValue({
+            maybeSingle: updateMaybeSingle
+        });
+
+        const updateSecondEq = vi.fn().mockReturnValue({
+            select: updateSelect
+        });
+
+        const updateFirstEq = vi.fn().mockReturnValue({
+            eq: updateSecondEq
+        });
+
+        const updateQuery = vi.fn().mockReturnValue({
+            eq: updateFirstEq
+        });
         const from = vi.fn().mockReturnValue({
             select: prereqSelect,
+            update: updateQuery,
             delete: deleteQuery
         });
 
@@ -1379,9 +1737,210 @@ describe("deleteCourse", () => {
 
         await deleteCourse("course-1", true);
 
+        expect(updateQuery).toHaveBeenCalledWith({
+            prerequisites: []
+        });
+
+        expect(updateFirstEq).toHaveBeenCalledWith("id", "course-2");
+        expect(updateSecondEq).toHaveBeenCalledWith("user_id", "user-1234");
+
         expect(deleteQuery).toHaveBeenCalled();
         expect(firstEq).toHaveBeenCalledWith("id", "course-1");
         expect(secondEq).toHaveBeenCalledWith("user_id", "user-1234");
+        expect(redirect).toHaveBeenCalledWith("/courses");
+    });
+
+    it("returns Course not found when deleting a nonexistent course", async() => {
+        const getUser = vi.fn().mockResolvedValue({
+            data: {
+                user: {
+                    id: "user-1234"
+                }
+            }
+        });
+
+        const prereqEq = vi.fn().mockResolvedValue({
+            data: [
+                {
+                    id: "course-1",
+                    course_code: "COMP-1000",
+                    prerequisites: []
+                }
+            ],
+            error: null
+        });
+
+        const prereqSelect = vi.fn().mockReturnValue({
+            eq: prereqEq
+        });
+
+        const deleteQuery = vi.fn();
+
+        const from = vi.fn().mockReturnValue({
+            select: prereqSelect,
+            delete: deleteQuery
+        });
+
+        createClient.mockResolvedValue({
+            auth: {
+                getUser
+            },
+            from
+        });
+
+        const result = await deleteCourse("fake-course");
+
+        expect(result).toEqual({
+            error: "Course not found."
+        });
+
+        expect(deleteQuery).not.toHaveBeenCalled();
+    });
+
+    it("US-09 AC4: prevents deletion when updating dependent prerequisites fails", async () => {
+        const getUser = vi.fn().mockResolvedValue({
+            data: { user: { id: "user-1234" } }
+        });
+
+        const prereqEq = vi.fn().mockResolvedValue({
+            data: [
+                {
+                    id: "course-1",
+                    course_code: "COMP-1000",
+                    prerequisites: []
+                },
+                {
+                    id: "course-2",
+                    course_code: "COMP-2000",
+                    prerequisites: ["COMP-1000"]
+                }
+            ],
+            error: null
+        });
+
+        const prereqSelect = vi.fn().mockReturnValue({
+            eq: prereqEq
+        });
+        
+        const updateMaybeSingle = vi.fn().mockResolvedValue({
+            data: null,
+            error: { message: "Database update failed" }
+        });
+
+        const updateSelect = vi.fn().mockReturnValue({
+            maybeSingle: updateMaybeSingle
+        });
+
+        const updateSecondEq = vi.fn().mockReturnValue({
+            select: updateSelect
+        });
+
+        const updateFirstEq = vi.fn().mockReturnValue({
+            eq: updateSecondEq
+        });
+
+        const updateQuery = vi.fn().mockReturnValue({
+            eq: updateFirstEq
+        });
+
+        const deleteQuery = vi.fn();
+
+        const from = vi.fn().mockReturnValue({
+            select: prereqSelect,
+            update: updateQuery,
+            delete: deleteQuery
+        });
+
+        createClient.mockResolvedValue({
+            auth: { getUser },
+            from
+        });
+
+        const result = await deleteCourse("course-1", true);
+
+        expect(updateQuery).toHaveBeenCalledWith({
+            prerequisites: []
+        });
+
+        expect(result).toEqual({
+            error: "Unable to update dependent prerequisites. Course was not deleted."
+        });
+
+        expect(deleteQuery).not.toHaveBeenCalled();
+        expect(redirect).not.toHaveBeenCalled();
+    });
+
+});
+
+describe("updateCourse recalculates the saved plan (us-05)", () => {
+    const formWithStatus = (status: string) => {
+        const formData = new FormData();
+        formData.set("id", "course-123");
+        formData.set("course_name", "Software Engineering");
+        formData.set("course_code", "COMP-3415");
+        formData.set("credits", "1");
+        formData.set("status", status);
+        formData.set("prerequisites", "");
+        return formData;
+    };
+
+    // the course is saved with previousStatus before the edit
+    const mockUpdate = (previousStatus: string) => {
+        const maybeSingle = vi.fn().mockResolvedValue({ data: { id: "course-123" }, error: null });
+        const select = vi.fn().mockReturnValue({ maybeSingle });
+        const secondEq = vi.fn().mockReturnValue({ select });
+        const firstEq = vi.fn().mockReturnValue({ eq: secondEq });
+        const update = vi.fn().mockReturnValue({ eq: firstEq });
+        const coursesEq = vi.fn().mockResolvedValue({
+            data: [{ id: "course-123", course_code: "COMP-3415", status: previousStatus, prerequisites: [] }],
+            error: null
+        });
+        const from = vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({ eq: coursesEq }),
+            update
+        });
+
+                
+        createClient.mockResolvedValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1234" } } })
+            },
+            from
+        });
+    };
+
+    it("shows the updated plan when the status changes and a plan is saved", async () => {
+        redirect.mockReset();
+        recalculateSavedPlan.mockReset().mockResolvedValue({
+            course: "COMP-3415", status: "failed", from: 1, to: 2, moved: []
+        });
+        mockUpdate("in_progress");
+
+        await updateCourse({}, formWithStatus("failed"));
+
+        expect(recalculateSavedPlan).toHaveBeenCalledWith(expect.anything(), "user-1234", "COMP-3415", "failed");
+        expect(redirect).toHaveBeenCalledWith("/plan?changed=COMP-3415");
+    });
+
+    it("goes back to the course list when there is no saved plan", async () => {
+        redirect.mockReset();
+        recalculateSavedPlan.mockReset().mockResolvedValue(null);
+        mockUpdate("in_progress");
+
+        await updateCourse({}, formWithStatus("completed"));
+
+        expect(recalculateSavedPlan).toHaveBeenCalled();
+        expect(redirect).toHaveBeenCalledWith("/courses");
+    });
+
+    it("does not touch the plan when the status stays the same", async () => {
+        redirect.mockReset();
+        recalculateSavedPlan.mockReset();
+        mockUpdate("failed");
+
+        await updateCourse({}, formWithStatus("failed"));
+
+        expect(recalculateSavedPlan).not.toHaveBeenCalled();
         expect(redirect).toHaveBeenCalledWith("/courses");
     });
 });

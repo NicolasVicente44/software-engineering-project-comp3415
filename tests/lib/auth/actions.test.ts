@@ -6,6 +6,7 @@ const {
   signOutMock,
   resetPasswordForEmail,
   updateUser,
+  getUser,
   redirect,
 } = vi.hoisted(() => ({
   signInWithPassword: vi.fn(),
@@ -13,6 +14,7 @@ const {
   signOutMock: vi.fn(),
   resetPasswordForEmail: vi.fn(),
   updateUser: vi.fn(),
+  getUser: vi.fn(),
   redirect: vi.fn((url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
   }),
@@ -30,11 +32,14 @@ vi.mock("@/lib/supabase/server", () => ({
       signOut: signOutMock,
       resetPasswordForEmail,
       updateUser,
+      getUser,
     },
   }),
 }));
 
 import {
+  changeEmail,
+  changePassword,
   requestPasswordReset,
   signIn,
   signOut,
@@ -243,5 +248,125 @@ describe("signOut", () => {
     signOutMock.mockResolvedValue({ error: null });
     await expect(signOut()).rejects.toThrow("NEXT_REDIRECT:/login");
     expect(signOutMock).toHaveBeenCalled();
+  });
+});
+
+function changePasswordForm(
+  currentPassword: string,
+  password: string,
+  confirmPassword = password,
+) {
+  const fd = new FormData();
+  fd.set("currentPassword", currentPassword);
+  fd.set("password", password);
+  fd.set("confirmPassword", confirmPassword);
+  return fd;
+}
+
+const signedIn = () =>
+  getUser.mockResolvedValue({
+    data: { user: { id: "user-1234", email: "student@example.com" } },
+  });
+
+describe("changePassword (us-11)", () => {
+  it("requires the current password", async () => {
+    const state = await changePassword({}, changePasswordForm("", "newpassword1"));
+    expect(state.error).toBe("Enter your current password.");
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects mismatched new passwords without changing anything", async () => {
+    const state = await changePassword(
+      {},
+      changePasswordForm("oldpassword", "newpassword1", "newpassword2"),
+    );
+    expect(state.error).toBe("Passwords do not match.");
+    expect(signInWithPassword).not.toHaveBeenCalled();
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects a new password that is too short", async () => {
+    const state = await changePassword({}, changePasswordForm("oldpassword", "short"));
+    expect(state.error).toMatch(/at least 8/);
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("returns an error when the user is not signed in", async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    const state = await changePassword({}, changePasswordForm("oldpassword", "newpassword1"));
+    expect(state.error).toBe("You must be signed in to change your password.");
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("does not change the password when the current one is wrong", async () => {
+    signedIn();
+    signInWithPassword.mockResolvedValue({
+      error: { code: "invalid_credentials", message: "bad" },
+    });
+    const state = await changePassword({}, changePasswordForm("wrongpass", "newpassword1"));
+    expect(signInWithPassword).toHaveBeenCalledWith({
+      email: "student@example.com",
+      password: "wrongpass",
+    });
+    expect(state.error).toBe("Your current password is incorrect.");
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("shows a friendly message when the new password matches the old one", async () => {
+    signedIn();
+    signInWithPassword.mockResolvedValue({ error: null });
+    updateUser.mockResolvedValue({ error: { code: "same_password", message: "same" } });
+    const state = await changePassword({}, changePasswordForm("oldpassword", "oldpassword"));
+    expect(state.error).toMatch(/different from your old one/i);
+  });
+
+  it("changes the password and confirms it without redirecting", async () => {
+    signedIn();
+    signInWithPassword.mockResolvedValue({ error: null });
+    updateUser.mockResolvedValue({ error: null });
+    const state = await changePassword({}, changePasswordForm("oldpassword", "newpassword1"));
+    expect(updateUser).toHaveBeenCalledWith({ password: "newpassword1" });
+    expect(state).toEqual({ message: "Your password was changed." });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+describe("changeEmail (us-11)", () => {
+  it("returns a validation error for a bad email", async () => {
+    const state = await changeEmail({}, emailForm("not-an-email"));
+    expect(state.error).toBe("Enter a valid email address.");
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("returns an error when the user is not signed in", async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    const state = await changeEmail({}, emailForm("new@example.com"));
+    expect(state.error).toBe("You must be signed in to change your email.");
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects the email the student already has", async () => {
+    signedIn();
+    const state = await changeEmail({}, emailForm("Student@Example.com"));
+    expect(state.error).toBe("That is already your email address.");
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("sends a confirmation link that returns to the profile", async () => {
+    signedIn();
+    updateUser.mockResolvedValue({ error: null });
+    const state = await changeEmail({}, emailForm("new@example.com"));
+    expect(updateUser).toHaveBeenCalledWith(
+      { email: "new@example.com" },
+      { emailRedirectTo: "http://localhost:3000/auth/callback?next=/profile" },
+    );
+    expect(state.message).toMatch(/confirmation link to new@example.com/);
+  });
+
+  it("shows a friendly message when the email is taken", async () => {
+    signedIn();
+    updateUser.mockResolvedValue({ error: { code: "email_exists", message: "taken" } });
+    const state = await changeEmail({}, emailForm("taken@example.com"));
+    expect(state.error).toMatch(/already exists/);
   });
 });

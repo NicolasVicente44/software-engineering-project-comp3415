@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getPasswordStrength,
   MIN_PASSWORD_LENGTH,
+  parseChangePassword,
   parseCredentials,
   parseEmail,
   parseNewPassword,
@@ -156,5 +157,39 @@ describe("getPasswordStrength", () => {
     ["Abcdefghijk1!", 4, "Strong"],
   ])("rates %j", (password, score, label) => {
     expect(getPasswordStrength(password)).toEqual({ score, label });
+  });
+});
+
+describe("parseChangePassword (us-11)", () => {
+  it("requires the current password", () => {
+    const result = parseChangePassword(
+      fields({ password: "newpassword1", confirmPassword: "newpassword1" }),
+    );
+    expect(result).toEqual({ ok: false, error: "Enter your current password." });
+  });
+
+  it("checks the new password like any other new password", () => {
+    const result = parseChangePassword(
+      fields({
+        currentPassword: "oldpassword",
+        password: "newpassword1",
+        confirmPassword: "different1",
+      }),
+    );
+    expect(result).toEqual({ ok: false, error: "Passwords do not match." });
+  });
+
+  it("returns the current and new password when valid", () => {
+    const result = parseChangePassword(
+      fields({
+        currentPassword: "oldpassword",
+        password: "newpassword1",
+        confirmPassword: "newpassword1",
+      }),
+    );
+    expect(result).toEqual({
+      ok: true,
+      value: { currentPassword: "oldpassword", password: "newpassword1" },
+    });
   });
 });

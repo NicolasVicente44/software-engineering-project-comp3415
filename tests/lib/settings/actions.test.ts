@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { saveCreditLimit } from "@/lib/settings/actions";
+import { savePlanningSettings, saveProfileDetails } from "@/lib/settings/actions";
 
-const { createClient, redirect } = vi.hoisted(() => ({
+const { createClient, revalidatePath } = vi.hoisted(() => ({
     createClient: vi.fn(),
-    redirect: vi.fn(),
+    revalidatePath: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
     createClient,
 }));
 
-vi.mock("next/navigation", () => ({
-    redirect,
+vi.mock("next/cache", () => ({
+    revalidatePath,
 }));
 
 const mockSupabase = (
@@ -31,76 +31,121 @@ const mockSupabase = (
     return { from, upsert };
 };
 
-const formWith = (creditLimit?: string) => {
+const formWith = (values: Record<string, string>) => {
     const formData = new FormData();
-    if (creditLimit !== undefined) {
-        formData.set("credit_limit", creditLimit);
-    }
+    Object.entries(values).forEach(([key, value]) => formData.set(key, value));
     return formData;
 };
 
-describe("saveCreditLimit", () => {
-    beforeEach(() => {
-        redirect.mockReset();
-    });
+beforeEach(() => {
+    vi.clearAllMocks();
+});
 
-    it("saves the limit for the logged in user and regenerates the plan", async () => {
+describe("savePlanningSettings", () => {
+    it("saves the credit limit and credits to graduate for the logged in user", async () => {
         const { from, upsert } = mockSupabase();
 
-        await saveCreditLimit({}, formWith("2.5"));
+        const result = await savePlanningSettings(
+            {},
+            formWith({ credit_limit: "2.5", credits_to_graduate: "20" })
+        );
 
         expect(from).toHaveBeenCalledWith("student_settings");
         expect(upsert).toHaveBeenCalledWith(
-            expect.objectContaining({ user_id: "user-1234", credit_limit: 2.5 })
+            expect.objectContaining({ user_id: "user-1234", credit_limit: 2.5, credits_to_graduate: 20 })
         );
-        expect(redirect).toHaveBeenCalledWith("/plan?generate=1");
+        expect(result).toEqual({ message: "Your planning settings were saved." });
+    });
+
+    it("refreshes the plan and dashboard so they use the new values", async () => {
+        mockSupabase();
+
+        await savePlanningSettings({}, formWith({ credit_limit: "2" }));
+
+        expect(revalidatePath).toHaveBeenCalledWith("/plan");
+        expect(revalidatePath).toHaveBeenCalledWith("/dashboard");
     });
 
     it("returns an error when the user is not signed in", async () => {
         const { upsert } = mockSupabase({ error: null }, null);
 
-        const result = await saveCreditLimit({}, formWith("2.5"));
+        const result = await savePlanningSettings({}, formWith({ credit_limit: "2.5" }));
 
         expect(result).toEqual({
-            error: "You must be signed in to change your credit limit."
+            error: "You must be signed in to change your planning settings."
         });
         expect(upsert).not.toHaveBeenCalled();
     });
 
-    it("returns an error when the limit is missing", async () => {
+    it("returns a validation error without saving", async () => {
         const { upsert } = mockSupabase();
 
-        expect(await saveCreditLimit({}, formWith())).toEqual({
-            error: "Credit limit is required."
-        });
-        expect(await saveCreditLimit({}, formWith("  "))).toEqual({
-            error: "Credit limit is required."
-        });
-        expect(upsert).not.toHaveBeenCalled();
-    });
-
-    it.each(["0", "-1", "abc", "10.5"])("rejects an invalid limit of %s", async (value) => {
-        const { upsert } = mockSupabase();
-
-        const result = await saveCreditLimit({}, formWith(value));
+        const result = await savePlanningSettings({}, formWith({ credit_limit: "-1" }));
 
         expect(result).toEqual({
             error: "Credit limit must be a number greater than 0 and at most 10."
         });
         expect(upsert).not.toHaveBeenCalled();
-        expect(redirect).not.toHaveBeenCalled();
     });
 
-    it("returns an error when the limit cannot be saved", async () => {
+    it("returns an error when the settings cannot be saved", async () => {
         mockSupabase({ error: { message: "Error in database" } });
         const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
-        const result = await saveCreditLimit({}, formWith("2"));
+        const result = await savePlanningSettings({}, formWith({ credit_limit: "2" }));
         consoleError.mockRestore();
 
         expect(result).toEqual({
-            error: "Unable to save your credit limit. Please try again."
+            error: "Unable to save your planning settings. Please try again."
         });
-        expect(redirect).not.toHaveBeenCalled();
+        expect(revalidatePath).not.toHaveBeenCalled();
+    });
+});
+
+describe("saveProfileDetails", () => {
+    it("saves the name, school and program for the logged in user", async () => {
+        const { upsert } = mockSupabase();
+
+        const result = await saveProfileDetails(
+            {},
+            formWith({ full_name: " Jane Doe ", school: "Lakehead University", program: "" })
+        );
+
+        expect(upsert).toHaveBeenCalledWith(
+            expect.objectContaining({
+                user_id: "user-1234",
+                full_name: "Jane Doe",
+                school: "Lakehead University",
+                program: null
+            })
+        );
+        expect(result).toEqual({ message: "Your profile was saved." });
+    });
+
+    it("does not touch the planning settings", async () => {
+        const { upsert } = mockSupabase();
+
+        await saveProfileDetails({}, formWith({ full_name: "Jane" }));
+
+        expect(upsert.mock.calls[0][0]).not.toHaveProperty("credit_limit");
+    });
+
+    it("returns a validation error without saving", async () => {
+        const { upsert } = mockSupabase();
+
+        const result = await saveProfileDetails({}, formWith({ school: "x".repeat(101) }));
+
+        expect(result).toEqual({ error: "School must be at most 100 characters." });
+        expect(upsert).not.toHaveBeenCalled();
+    });
+
+    it("returns an error when the profile cannot be saved", async () => {
+        mockSupabase({ error: { message: "Error in database" } });
+        const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        const result = await saveProfileDetails({}, formWith({ full_name: "Jane" }));
+        consoleError.mockRestore();
+
+        expect(result).toEqual({ error: "Unable to save your profile. Please try again." });
     });
 });

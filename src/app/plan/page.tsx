@@ -1,16 +1,15 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Navbar } from "@/components/navbar";
-import { CreditLimitForm } from "@/components/plan/credit-limit-form";
-import {
-    DEFAULT_COURSE_CREDITS,
-    DEFAULT_CREDIT_LIMIT,
-    generatePlan,
-} from "@/lib/planner/generate-plan";
+import { TermCard, type TermCourse } from "@/components/plan/term-card";
+import { DEFAULT_COURSE_CREDITS } from "@/lib/planner/generate-plan";
+import { generatePlanAction } from "@/lib/planner/actions";
+import type { PlanChange } from "@/lib/planner/recalculate-plan";
+import { loadPlanData, planInputs } from "@/lib/planner/saved-plan";
 import { normalizeCourseCode } from "@/lib/prerequisites/check";
-import { saveCreditLimit } from "@/lib/settings/actions";
 import { createClient } from "@/lib/supabase/server";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
     Card,
@@ -20,12 +19,49 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 
+const STATUS_WORDS: Record<string, string> = {
+    failed: "failed",
+    dropped: "dropped",
+    in_progress: "in progress",
+    completed: "completed",
+};
+
+// rounded so sums like 0.1 + 0.2 display cleanly
+const round = (value: number) => Number(value.toFixed(2));
+
+// what a status change did to the plan, in words (us-05)
+function describeChange(change: PlanChange): { title: string; details?: string } {
+    const status = STATUS_WORDS[change.status] ?? change.status;
+    let title: string;
+
+    if (change.status === "completed") {
+        title = `${change.course} is completed and was removed from your plan.`;
+    } else if (change.to === null) {
+        title = `${change.course} was marked ${status} but could not be placed. Check for circular prerequisites.`;
+    } else if (change.from === null) {
+        title = `${change.course} was marked ${status} and added to Term ${change.to}.`;
+    } else if (change.from === change.to) {
+        title = `${change.course} was marked ${status}. Your plan did not need to change.`;
+    } else {
+        title = `${change.course} was marked ${status} and moved from Term ${change.from} to Term ${change.to}.`;
+    }
+
+    if (change.moved.length === 0) return { title };
+
+    return {
+        title,
+        details: `Also moved later because they depend on it: ${change.moved
+            .map((course) => `${course.code} (Term ${course.from} → ${course.to})`)
+            .join(", ")}.`,
+    };
+}
+
 export default async function PlanView({
     searchParams,
 }: {
-    searchParams: Promise<{ generate?: string }>;
+    searchParams: Promise<{ changed?: string; error?: string }>;
 }) {
-    const generate = (await searchParams).generate === "1";
+    const params = await searchParams;
     const supabase = await createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -34,90 +70,95 @@ export default async function PlanView({
         redirect("/login");
     }
 
-    const { data: courses, error } = await supabase
-        .from("student_courses")
-        .select("course_code, credits, status, prerequisites")
-        .eq("user_id", user.id);
+    const { courses, coursesError, settingsError, creditLimit, savedPlan } =
+        await loadPlanData(supabase, user.id);
 
-    if (error) {
-        console.error("Failed to load courses for plan: ", error);
+    if (coursesError) {
+        console.error("Failed to load courses for plan: ", coursesError);
     }
-
-    // the student's saved credit limit, or the default if none is saved (us-06)
-    const { data: settings, error: settingsError } = await supabase
-        .from("student_settings")
-        .select("credit_limit")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
     if (settingsError) {
-        console.error("Failed to load credit limit for plan: ", settingsError);
+        console.error("Failed to load plan settings: ", settingsError);
     }
 
-    const creditLimit = Number(settings?.credit_limit ?? DEFAULT_CREDIT_LIMIT);
+    const loadFailed = Boolean(coursesError || settingsError);
+    const { credits, toTake } = planInputs(courses);
+    const creditsOf = (code: string) => credits[code] ?? DEFAULT_COURSE_CREDITS;
+    const courseByCode = new Map(courses.map((course) => [normalizeCourseCode(course.course_code), course]));
 
-    // course code -> credits, from the student's own courses (us-06)
-    const credits: Record<string, number> = {};
-    // a course without a credit value falls back to the planner's default
-    for (const course of courses ?? []) {
-        if (course.credits != null) {
-            credits[normalizeCourseCode(course.course_code)] = Number(course.credits);
-        }
-    }
+    // the change is only shown right after the status change that caused it (us-05)
+    const change =
+        params.changed && savedPlan?.lastChange?.course === normalizeCourseCode(params.changed)
+            ? savedPlan.lastChange
+            : undefined;
+    const movedCodes = new Set([
+        ...(change?.moved.map((course) => course.code) ?? []),
+        ...(change && change.to !== null && change.from !== change.to ? [change.course] : []),
+    ]);
 
-    // build the prereq map for each course to check against 
-    const prereqMap: Record<string, string[]> = {};
+    const plannedCodes = savedPlan?.terms.flatMap((term) => term.courses) ?? [];
+    const plannedSet = new Set(plannedCodes);
+    const toTakeSet = new Set(toTake);
 
-    for (const course of courses ?? []) {
-        const code = normalizeCourseCode(course.course_code);
+    // changes made outside the plan (adding or deleting courses, a new credit
+    // limit) are not applied automatically, so the student is told to regenerate
+    const notInPlan = toTake.filter(
+        (code) => !plannedSet.has(code) && !savedPlan?.unschedulable.includes(code)
+    );
+    const noLongerNeeded = plannedCodes.filter((code) => !toTakeSet.has(code));
+    const limitChanged = savedPlan !== null && savedPlan.creditLimit !== creditLimit;
+    const outOfDate = savedPlan !== null && (notInPlan.length > 0 || noLongerNeeded.length > 0 || limitChanged);
 
-        prereqMap[code] = (course.prerequisites ?? [])
-            .map(normalizeCourseCode);
-    }
+    const overLimit = plannedCodes.filter((code) => creditsOf(code) > creditLimit);
+    const creditsLeft = round(plannedCodes.reduce((sum, code) => sum + creditsOf(code), 0));
 
-    // rounded so sums like 0.1 + 0.2 display cleanly
-    const termCredits = (codes: string[]) => Number(
-        codes.reduce((sum, code) => sum + (credits[code] ?? DEFAULT_COURSE_CREDITS), 0).toFixed(2)
+    const termCourses = (codes: string[]): TermCourse[] =>
+        codes.map((code) => ({
+            code,
+            name: courseByCode.get(code)?.course_name ?? null,
+            credits: creditsOf(code),
+            status: courseByCode.get(code)?.status ?? "",
+            moved: movedCodes.has(code),
+        }));
+
+    const generateButton = (
+        <form action={generatePlanAction}>
+            <Button type="submit" variant={savedPlan ? "outline" : "default"}>
+                {savedPlan ? "Regenerate Plan" : "Generate Plan"}
+            </Button>
+        </form>
     );
 
-    // the plan is built from the student's own courses (us-04): completed
-    // ones count as done, in-progress and failed ones still need to be taken
-    // and dropped ones are ignored
-    const codesWith = (...statuses: string[]) =>
-        (courses ?? [])
-            .filter((course) => statuses.includes(course.status))
-            .map((course) => course.course_code);
-    const completed = codesWith("completed");
-    const toTake = codesWith("in_progress", "failed");
-
-    // the plan is only built when the student selects "Generate Plan"
-    const plan = generate && !error && !settingsError
-        ? generatePlan(completed, toTake, prereqMap, { creditLimit, credits })
-        : null;
+    const changeText = change ? describeChange(change) : null;
 
     return (
         <div className="flex flex-1 flex-col">
             <Navbar />
-            <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
-                <h1 className="text-2xl font-semibold">My Academic Plan</h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    Your in-progress and failed courses, placed after their prerequisites
-                    and kept within your credit limit.
-                </p>
-
-                <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
-                    <form action="/plan" method="get">
-                        <input type="hidden" name="generate" value="1" />
-                        <Button type="submit">Generate Plan</Button>
-                    </form>
-
-                    {!settingsError && (
-                        <CreditLimitForm action={saveCreditLimit} creditLimit={creditLimit} />
+            <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-5 px-4 py-10">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="max-w-2xl">
+                        <h1 className="text-2xl font-semibold">My Academic Plan</h1>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Your in-progress, failed and dropped courses, placed after their
+                            prerequisites and kept within your credit limit. It updates when
+                            you change a course&apos;s status.
+                        </p>
+                    </div>
+                    {!loadFailed && (
+                        <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2">
+                            <p className="text-sm text-muted-foreground">
+                                Credit limit: <strong className="text-foreground">{creditLimit}</strong> per term
+                                {" · "}
+                                <Link href="/profile" className="font-medium text-foreground underline-offset-4 hover:underline">
+                                    Change in Profile
+                                </Link>
+                            </p>
+                            {savedPlan && generateButton}
+                        </div>
                     )}
                 </div>
 
-                {error && (
-                    <Alert variant="destructive" className="mt-4">
+                {coursesError && (
+                    <Alert variant="destructive">
                         <AlertDescription>
                             Unable to load your courses. Please try again.
                         </AlertDescription>
@@ -125,56 +166,107 @@ export default async function PlanView({
                 )}
 
                 {settingsError && (
-                    <Alert variant="destructive" className="mt-4">
+                    <Alert variant="destructive">
                         <AlertDescription>
                             Unable to load your credit limit. Please try again.
                         </AlertDescription>
                     </Alert>
                 )}
 
-                {plan?.complete && (
-                    <Alert className="mt-4" role="status">
+                {params.error === "generate" && (
+                    <Alert variant="destructive">
                         <AlertDescription>
-                            No courses to plan. Add courses as in progress or failed on the Courses page.
+                            Unable to generate your plan. Please try again.
                         </AlertDescription>
                     </Alert>
                 )}
 
-                {plan && plan.unschedulable.length > 0 && (
-                    <Alert variant="destructive" className="mt-4">
+                {changeText && (
+                    <Alert role="status">
+                        <AlertTitle>Plan updated</AlertTitle>
                         <AlertDescription>
-                            Could not place: {plan.unschedulable.join(", ")}. Check for circular prerequisites.
+                            <p>{changeText.title}</p>
+                            {changeText.details && <p>{changeText.details}</p>}
                         </AlertDescription>
                     </Alert>
                 )}
 
-                {plan && plan.overLimit.length > 0 && (
-                    <Alert className="mt-4" role="status">
+                {!loadFailed && outOfDate && (
+                    <Alert role="status">
+                        <AlertTitle>Your plan may be out of date</AlertTitle>
                         <AlertDescription>
-                            Over your {creditLimit} credit limit on their own, so each has a term to itself: {plan.overLimit.join(", ")}.
+                            {notInPlan.length > 0 && <p>Not in your plan yet: {notInPlan.join(", ")}.</p>}
+                            {noLongerNeeded.length > 0 && <p>No longer needed: {noLongerNeeded.join(", ")}.</p>}
+                            {limitChanged && <p>Your credit limit changed since this plan was made.</p>}
+                            <p>Regenerate your plan to include these changes.</p>
                         </AlertDescription>
                     </Alert>
                 )}
 
-                {plan?.terms.map((term) => (
-                    <Card key={term.term} className="mt-5">
+                {!loadFailed && !savedPlan && (
+                    <Card>
                         <CardHeader>
-                            <CardTitle>Term {term.term}</CardTitle>
+                            <CardTitle>You don&apos;t have a plan yet</CardTitle>
                             <CardDescription>
-                                {term.courses.length} course{term.courses.length === 1 ? "" : "s"}
-                                {" · "}
-                                {termCredits(term.courses)} of {creditLimit} credits
+                                Generate a plan from your courses. It is saved, and it updates
+                                when you mark a course as completed, failed or dropped.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            <ul className="list-disc pl-5">
-                                {term.courses.map((code) => (
-                                    <li key={code}>{code}</li>
-                                ))}
-                            </ul>
-                        </CardContent>
+                        <CardContent>{generateButton}</CardContent>
                     </Card>
-                ))}
+                )}
+
+                {!loadFailed && savedPlan && savedPlan.terms.length === 0 && savedPlan.unschedulable.length === 0 && (
+                    <Alert role="status">
+                        <AlertDescription>
+                            No courses to plan. Add courses as in progress, failed or dropped on the Courses page.
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {!loadFailed && savedPlan && savedPlan.unschedulable.length > 0 && (
+                    <Alert variant="destructive">
+                        <AlertDescription>
+                            Could not place: {savedPlan.unschedulable.join(", ")}. Check for circular prerequisites.
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {!loadFailed && overLimit.length > 0 && (
+                    <Alert role="status">
+                        <AlertDescription>
+                            Over your {creditLimit} credit limit on their own, so each has a term to itself: {overLimit.join(", ")}.
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {!loadFailed && savedPlan && savedPlan.terms.length > 0 && (
+                    <>
+                        <dl className="grid grid-cols-3 gap-3">
+                            {[
+                                ["Terms left", savedPlan.terms.length],
+                                ["Courses left", plannedCodes.length],
+                                ["Credits left", creditsLeft],
+                            ].map(([label, value]) => (
+                                <div key={label} className="rounded-xl border bg-card px-4 py-3">
+                                    <dt className="text-xs text-muted-foreground">{label}</dt>
+                                    <dd className="mt-1 text-xl font-semibold tabular-nums">{value}</dd>
+                                </div>
+                            ))}
+                        </dl>
+
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                            {savedPlan.terms.map((term) => (
+                                <TermCard
+                                    key={term.term}
+                                    term={term.term}
+                                    courses={termCourses(term.courses)}
+                                    creditLimit={creditLimit}
+                                />
+                            ))}
+                        </div>
+                    </>
+                )}
             </main>
         </div>
     );

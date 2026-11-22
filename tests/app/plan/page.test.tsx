@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import PlanView from "@/app/plan/page";
 
 const { createClient, redirect } = vi.hoisted(() => ({
@@ -15,19 +15,17 @@ vi.mock("next/navigation", () => ({
     redirect,
 }));
 
-// the credit limit form is a client component tested on its own
-vi.mock("@/components/plan/credit-limit-form", () => ({
-    CreditLimitForm: ({ creditLimit }: { creditLimit: number }) => (
-        <p>Credit limit form: {creditLimit}</p>
-    ),
+// these have their own server actions and are not under test here
+vi.mock("@/components/navbar", () => ({
+    Navbar: () => <nav />,
 }));
 
 const mockSupabase = (
-    result: { data: unknown; error: unknown },
-    user: { id: string } | null = { id: "user-1234" },
-    settings: { data: unknown; error: unknown } = { data: null, error: null }
+    courses: { data: unknown; error: unknown },
+    settings: { data: unknown; error: unknown } = { data: null, error: null },
+    user: { id: string } | null = { id: "user-1234" }
 ) => {
-    const eq = vi.fn().mockResolvedValue(result);
+    const eq = vi.fn().mockResolvedValue(courses);
     const select = vi.fn().mockReturnValue({ eq });
     const maybeSingle = vi.fn().mockResolvedValue(settings);
     const settingsEq = vi.fn().mockReturnValue({ maybeSingle });
@@ -43,212 +41,257 @@ const mockSupabase = (
         from
     });
 
-    return { from, select, eq, settingsEq };
+    return { from, eq, settingsEq };
 };
 
-const generated = { searchParams: Promise.resolve({ generate: "1" }) };
-const NOTHING_TO_PLAN =
-    "No courses to plan. Add courses as in progress or failed on the Courses page.";
+const course = (course_code: string, status = "in_progress", extra: Record<string, unknown> = {}) => ({
+    course_code,
+    course_name: `${course_code} name`,
+    credits: 0.5,
+    status,
+    prerequisites: [],
+    ...extra,
+});
 
-describe("PlanView", () => {
+const savedPlan = (terms: { term: number; courses: string[] }[], extra: Record<string, unknown> = {}) => ({
+    data: {
+        credit_limit: 2.5,
+        saved_plan: { terms, creditLimit: 2.5, generatedAt: "2026-11-16T00:00:00Z", unschedulable: [], ...extra },
+    },
+    error: null,
+});
+
+const page = (params: Record<string, string> = {}) => PlanView({ searchParams: Promise.resolve(params) });
+
+describe("PlanView (us-04, us-05, us-06)", () => {
     beforeEach(() => {
         redirect.mockReset();
     });
 
-    it("shows the Generate Plan button without a plan until it is selected", async () => {
-        mockSupabase({
-            data: [{ course_code: "COMP-2477", status: "in_progress" }],
-            error: null
-        });
-
-        render(await PlanView({ searchParams: Promise.resolve({}) }));
-
-        expect(screen.getByRole("button", { name: "Generate Plan" })).toBeInTheDocument();
-        expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
-        expect(screen.queryByText(NOTHING_TO_PLAN)).not.toBeInTheDocument();
-    });
-
-    it("plans the user's own courses in terms for the logged in user", async () => {
-        const { from, eq } = mockSupabase({
-            data: [
-                { course_code: "COMP-1411", status: "completed" },
-                { course_code: "COMP-1431", status: "completed" },
-                { course_code: "COMP-2412", status: "completed" },
-                { course_code: "COMP-2477", status: "in_progress" },
-                {
-                    course_code: "COMP-3415",
-                    status: "in_progress",
-                    prerequisites: ["COMP-2477"]
-                },
-            ],
-            error: null
-        });
-
-        render(await PlanView(generated));
-
-        expect(from).toHaveBeenCalledWith("student_courses");
-        expect(eq).toHaveBeenCalledWith("user_id", "user-1234");
-        expect(screen.getByText("Term 1")).toBeInTheDocument();
-        expect(screen.getByText("COMP-2477")).toBeInTheDocument();
-        expect(screen.queryByText("COMP-1411")).not.toBeInTheDocument();
-        // COMP-3415 needs COMP-2477, so it is in a later term
-        expect(screen.getByText("Term 2")).toBeInTheDocument();
-        expect(screen.getByText("COMP-3415")).toBeInTheDocument();
-    });
-
-    it("includes failed courses and ignores completed and dropped ones", async () => {
-        mockSupabase({
-            data: [
-                { course_code: "COMP-1411", status: "failed" },
-                { course_code: "COMP-2477", status: "completed" },
-                { course_code: "COMP-1431", status: "dropped" },
-            ],
-            error: null
-        });
-
-        render(await PlanView(generated));
-
-        expect(screen.getByText("COMP-1411")).toBeInTheDocument();
-        expect(screen.queryByText("COMP-2477")).not.toBeInTheDocument();
-        expect(screen.queryByText("COMP-1431")).not.toBeInTheDocument();
-    });
-
-    it("shows a message and no terms when there is nothing to plan", async () => {
-        mockSupabase({
-            data: [
-                { course_code: "COMP-1411", status: "completed" },
-                { course_code: "COMP-1431", status: "dropped" },
-            ],
-            error: null
-        });
-
-        render(await PlanView(generated));
-
-        expect(screen.getByText(NOTHING_TO_PLAN)).toBeInTheDocument();
-        expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
-    });
-
-    it("shows the nothing to plan message for a student with no courses", async () => {
-        mockSupabase({ data: [], error: null });
-
-        render(await PlanView(generated));
-
-        expect(screen.getByText(NOTHING_TO_PLAN)).toBeInTheDocument();
-        expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
-    });
-
-    it("shows an error and no plan when the courses cannot be loaded", async () => {
-        mockSupabase({ data: null, error: { message: "Error in database" } });
-        const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-
-        render(await PlanView(generated));
-        consoleError.mockRestore();
-
-        expect(
-            screen.getByText("Unable to load your courses. Please try again.")
-        ).toBeInTheDocument();
-        expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
-        expect(screen.queryByText(NOTHING_TO_PLAN)).not.toBeInTheDocument();
-    });
-
     it("redirects to login when there is no user", async () => {
-        const { from } = mockSupabase({ data: [], error: null }, null);
-        // the real redirect() throws, which stops the page
+        const { from } = mockSupabase({ data: [], error: null }, undefined, null);
         redirect.mockImplementation(() => {
             throw new Error("NEXT_REDIRECT");
         });
 
-        await expect(PlanView(generated)).rejects.toThrow("NEXT_REDIRECT");
+        await expect(page()).rejects.toThrow("NEXT_REDIRECT");
 
         expect(redirect).toHaveBeenCalledWith("/login");
         expect(from).not.toHaveBeenCalled();
     });
 
-    describe("credit limit (us-06)", () => {
-        const course = (course_code: string, credits: number, status = "in_progress") =>
-            ({ course_code, credits, status });
+    it("asks the student to generate a plan when none is saved", async () => {
+        const { eq, settingsEq } = mockSupabase({ data: [course("COMP-2477")], error: null });
 
-        it("uses the default limit when the student has not saved one", async () => {
-            const { settingsEq } = mockSupabase({
-                data: [course("COMP-1000", 1), course("COMP-2000", 1), course("COMP-3000", 1)],
+        render(await page());
+
+        expect(eq).toHaveBeenCalledWith("user_id", "user-1234");
+        expect(settingsEq).toHaveBeenCalledWith("user_id", "user-1234");
+        expect(screen.getByText("You don't have a plan yet")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Generate Plan" })).toBeInTheDocument();
+        expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
+    });
+
+    it("shows the saved plan as term cards with course names, credits and a summary", async () => {
+        mockSupabase(
+            {
+                data: [
+                    course("COMP-1411", "completed"),
+                    course("COMP-2477", "in_progress", { credits: 1 }),
+                    course("COMP-3415", "in_progress", { prerequisites: ["COMP-2477"] }),
+                ],
                 error: null
-            });
+            },
+            savedPlan([
+                { term: 1, courses: ["COMP-2477"] },
+                { term: 2, courses: ["COMP-3415"] },
+            ])
+        );
 
-            render(await PlanView(generated));
+        render(await page());
 
-            expect(settingsEq).toHaveBeenCalledWith("user_id", "user-1234");
-            expect(screen.getByText("Credit limit form: 2.5")).toBeInTheDocument();
-            // 3 x 1.0 credits do not fit under 2.5, so the third waits a term
-            expect(screen.getByText("Term 2")).toBeInTheDocument();
-            expect(screen.getByText(/2 courses · 2 of 2\.5 credits/)).toBeInTheDocument();
-        });
+        expect(screen.getByRole("button", { name: "Regenerate Plan" })).toBeInTheDocument();
+        expect(screen.getByText("Term 1")).toBeInTheDocument();
+        expect(screen.getByText("Term 2")).toBeInTheDocument();
+        expect(screen.getByText("COMP-2477 name")).toBeInTheDocument();
+        expect(screen.getByText("1 of 2.5 credits")).toBeInTheDocument();
+        expect(screen.queryByText("COMP-1411")).not.toBeInTheDocument();
+        // summary: 2 terms, 2 courses, 1.5 credits left
+        expect(screen.getByText("Terms left").nextSibling).toHaveTextContent("2");
+        expect(screen.getByText("Courses left").nextSibling).toHaveTextContent("2");
+        expect(screen.getByText("Credits left").nextSibling).toHaveTextContent("1.5");
+    });
 
-        it("keeps every term at or under the student's saved limit", async () => {
-            mockSupabase(
+    it("labels failed and dropped courses as retakes", async () => {
+        mockSupabase(
+            { data: [course("COMP-1411", "failed"), course("COMP-1431", "dropped")], error: null },
+            savedPlan([{ term: 1, courses: ["COMP-1411", "COMP-1431"] }])
+        );
+
+        render(await page());
+
+        expect(screen.getByText("Retake · failed")).toBeInTheDocument();
+        expect(screen.getByText("Retake · dropped")).toBeInTheDocument();
+    });
+
+    it("shows what moved right after a status change", async () => {
+        mockSupabase(
+            {
+                data: [
+                    course("COMP-1000", "failed"),
+                    course("COMP-2000", "in_progress", { prerequisites: ["COMP-1000"] }),
+                ],
+                error: null
+            },
+            savedPlan(
+                [
+                    { term: 1, courses: [] },
+                    { term: 2, courses: ["COMP-1000"] },
+                    { term: 3, courses: ["COMP-2000"] },
+                ],
                 {
-                    data: [course("COMP-1000", 0.5), course("COMP-2000", 0.5), course("COMP-3000", 0.5)],
-                    error: null
+                    lastChange: {
+                        course: "COMP-1000",
+                        status: "failed",
+                        from: 1,
+                        to: 2,
+                        moved: [{ code: "COMP-2000", from: 2, to: 3 }],
+                    },
+                }
+            )
+        );
+
+        render(await page({ changed: "COMP-1000" }));
+
+        const alert = screen.getByText("Plan updated").closest("[role=status]") as HTMLElement;
+        expect(within(alert).getByText("COMP-1000 was marked failed and moved from Term 1 to Term 2.")).toBeInTheDocument();
+        expect(within(alert).getByText(/COMP-2000 \(Term 2 → 3\)/)).toBeInTheDocument();
+        expect(screen.getAllByText("Moved")).toHaveLength(2);
+        expect(screen.getByText("No courses this term.")).toBeInTheDocument();
+    });
+
+    it("explains when a completed course is removed", async () => {
+        mockSupabase(
+            { data: [course("COMP-1000", "completed")], error: null },
+            savedPlan([], {
+                lastChange: { course: "COMP-1000", status: "completed", from: 1, to: null, moved: [] },
+            })
+        );
+
+        render(await page({ changed: "comp-1000" }));
+
+        expect(screen.getByText("COMP-1000 is completed and was removed from your plan.")).toBeInTheDocument();
+    });
+
+    it("does not show an old change when the page is opened later", async () => {
+        mockSupabase(
+            { data: [course("COMP-1000", "failed")], error: null },
+            savedPlan([{ term: 2, courses: ["COMP-1000"] }], {
+                lastChange: { course: "COMP-1000", status: "failed", from: 1, to: 2, moved: [] },
+            })
+        );
+
+        render(await page());
+
+        expect(screen.queryByText("Plan updated")).not.toBeInTheDocument();
+        expect(screen.queryByText("Moved")).not.toBeInTheDocument();
+    });
+
+    it("warns when courses or the credit limit changed since the plan was made", async () => {
+        mockSupabase(
+            { data: [course("COMP-1000"), course("COMP-2000")], error: null },
+            {
+                data: {
+                    credit_limit: 1,
+                    saved_plan: {
+                        terms: [{ term: 1, courses: ["COMP-1000", "COMP-9999"] }],
+                        creditLimit: 2.5,
+                        generatedAt: "",
+                        unschedulable: [],
+                    },
                 },
-                undefined,
-                { data: { credit_limit: 1 }, error: null }
-            );
+                error: null,
+            }
+        );
 
-            render(await PlanView(generated));
+        render(await page());
 
-            expect(screen.getByText("Credit limit form: 1")).toBeInTheDocument();
-            expect(screen.getByText(/2 courses · 1 of 1 credits/)).toBeInTheDocument();
-            expect(screen.getByText(/1 course · 0\.5 of 1 credits/)).toBeInTheDocument();
-        });
+        expect(screen.getByText("Your plan may be out of date")).toBeInTheDocument();
+        expect(screen.getByText("Not in your plan yet: COMP-2000.")).toBeInTheDocument();
+        expect(screen.getByText("No longer needed: COMP-9999.")).toBeInTheDocument();
+        expect(screen.getByText("Your credit limit changed since this plan was made.")).toBeInTheDocument();
+    });
 
-        it("warns about a course worth more than the limit", async () => {
-            mockSupabase(
-                { data: [course("COMP-1000", 1.5)], error: null },
-                undefined,
-                { data: { credit_limit: 1 }, error: null }
-            );
+    it("shows the nothing to plan message for an empty saved plan", async () => {
+        mockSupabase({ data: [course("COMP-1411", "completed")], error: null }, savedPlan([]));
 
-            render(await PlanView(generated));
+        render(await page());
 
-            expect(screen.getByText(/Over your 1 credit limit on their own/)).toBeInTheDocument();
-            expect(screen.getByText("COMP-1000")).toBeInTheDocument();
-        });
+        expect(
+            screen.getByText("No courses to plan. Add courses as in progress, failed or dropped on the Courses page.")
+        ).toBeInTheDocument();
+    });
 
-        it("uses the default credits for a course with no credit value", async () => {
-            mockSupabase(
-                {
-                    data: [
-                        { course_code: "COMP-1000", credits: null, status: "in_progress" },
-                        course("COMP-2000", 0.5),
-                    ],
-                    error: null
-                },
-                undefined,
-                { data: { credit_limit: 0.5 }, error: null }
-            );
+    it("warns about courses that could not be placed", async () => {
+        mockSupabase(
+            { data: [course("COMP-1000"), course("COMP-2000")], error: null },
+            savedPlan([], { unschedulable: ["COMP-1000", "COMP-2000"] })
+        );
 
-            render(await PlanView(generated));
+        render(await page());
 
-            // at 0.5 credits each, the two courses cannot share a 0.5 limit
-            expect(screen.getByText("Term 2")).toBeInTheDocument();
-            expect(screen.getAllByText(/1 course · 0\.5 of 0\.5 credits/)).toHaveLength(2);
-        });
+        expect(screen.getByText(/Could not place: COMP-1000, COMP-2000/)).toBeInTheDocument();
+    });
 
-        it("shows an error and no plan when the limit cannot be loaded", async () => {
-            mockSupabase(
-                { data: [course("COMP-1000", 1)], error: null },
-                undefined,
-                { data: null, error: { message: "Error in database" } }
-            );
-            const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    it("warns about a course worth more than the credit limit", async () => {
+        mockSupabase(
+            { data: [course("COMP-1000", "in_progress", { credits: 3 })], error: null },
+            savedPlan([{ term: 1, courses: ["COMP-1000"] }])
+        );
 
-            render(await PlanView(generated));
-            consoleError.mockRestore();
+        render(await page());
 
-            expect(
-                screen.getByText("Unable to load your credit limit. Please try again.")
-            ).toBeInTheDocument();
-            expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
-            expect(screen.queryByText(/Credit limit form/)).not.toBeInTheDocument();
-        });
+        expect(screen.getByText(/Over your 2.5 credit limit on their own/)).toBeInTheDocument();
+    });
+
+    it("shows the credit limit with a link to change it in Profile", async () => {
+        mockSupabase({ data: [], error: null }, savedPlan([]));
+
+        render(await page());
+
+        expect(screen.getByText(/Credit limit:/)).toHaveTextContent("Credit limit: 2.5 per term");
+        expect(screen.getByRole("link", { name: "Change in Profile" })).toHaveAttribute("href", "/profile");
+    });
+
+    it("shows an error when generating the plan failed", async () => {
+        mockSupabase({ data: [], error: null });
+
+        render(await page({ error: "generate" }));
+
+        expect(screen.getByText("Unable to generate your plan. Please try again.")).toBeInTheDocument();
+    });
+
+    it("shows an error and no plan when the courses cannot be loaded", async () => {
+        mockSupabase({ data: null, error: { message: "Error in database" } }, savedPlan([{ term: 1, courses: ["COMP-1000"] }]));
+        const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        render(await page());
+        consoleError.mockRestore();
+
+        expect(screen.getByText("Unable to load your courses. Please try again.")).toBeInTheDocument();
+        expect(screen.queryByText("Term 1")).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /Generate/ })).not.toBeInTheDocument();
+    });
+
+    it("shows an error and no plan when the settings cannot be loaded", async () => {
+        mockSupabase({ data: [course("COMP-1000")], error: null }, { data: null, error: { message: "Error in database" } });
+        const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        render(await page());
+        consoleError.mockRestore();
+
+        expect(screen.getByText("Unable to load your credit limit. Please try again.")).toBeInTheDocument();
+        expect(screen.queryByText(/Credit limit:/)).not.toBeInTheDocument();
+        expect(screen.queryByText("You don't have a plan yet")).not.toBeInTheDocument();
     });
 });

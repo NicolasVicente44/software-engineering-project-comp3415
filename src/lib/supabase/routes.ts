@@ -1,4 +1,4 @@
-const PROTECTED_PREFIXES = ["/dashboard", "/reset-password"];
+const PROTECTED_PREFIXES = ["/dashboard", "/profile", "/reset-password"];
 const AUTH_PAGES = ["/login", "/signup", "/forgot-password"];
 
 function matches(pathname: string, prefix: string) {
